@@ -1,0 +1,256 @@
+/* 富文本编辑器容器 */
+.rich-text-editor-container {
+  position: fixed;
+  z-index: 1000;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  max-width: 500px;
+  max-height: 400px;
+  overflow: hidden;
+}
+
+/* 工具栏 */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fafafa;
+  flex-wrap: wrap;
+}
+
+.toolbar button {
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: #444;
+  transition: all 0.15s ease;
+}
+
+.toolbar button:hover {
+  background: #e8e8e8;
+}
+
+.toolbar button.is-active {
+  background: #4a9eff;
+  color: #fff;
+}
+
+.toolbar .divider {
+  width: 1px;
+  height: 20px;
+  background: #ddd;
+  margin: 0 4px;
+}
+
+.toolbar .color-picker {
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.toolbar .save-btn {
+  background: #52c41a;
+  color: #fff;
+}
+
+.toolbar .save-btn:hover {
+  background: #73d13d;
+}
+
+.toolbar .cancel-btn {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.toolbar .cancel-btn:hover {
+  background: #ff7875;
+}
+
+/* 悬浮菜单 */
+.bubble-menu {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  background: #1a1a1a;
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+.bubble-menu button {
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #fff;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bubble-menu button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bubble-menu button.is-active {
+  background: #4a9eff;
+}
+
+.bubble-menu .divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 4px;
+}
+
+.bubble-menu .color-picker {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+/* 编辑器内容区域 */
+.editor-content {
+  padding: 12px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 60px;
+}
+
+.editor-content .tiptap {
+  outline: none;
+  min-height: 40px;
+}
+
+.editor-content .tiptap p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.editor-content .tiptap p + p {
+  margin-top: 8px;
+}
+
+/* 代码块样式 */
+.editor-content .tiptap pre {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 13px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.editor-content .tiptap pre code {
+  background: transparent;
+  padding: 0;
+}
+
+/* 表格样式 */
+.editor-content .tiptap table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+}
+
+.editor-content .tiptap th,
+.editor-content .tiptap td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+  min-width: 60px;
+}
+
+.editor-content .tiptap th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+
+.editor-content .tiptap .selectedCell::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(74, 158, 255, 0.2);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 行内代码样式 */
+.editor-content .tiptap code {
+  background: #f5f5f5;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-size: 0.9em;
+}
+
+/* 删除线和下划线 */
+.editor-content .tiptap s {
+  text-decoration: line-through;
+}
+
+.editor-content .tiptap u {
+  text-decoration: underline;
+}
+
+/* 语法高亮 - 基础主题 */
+.hljs-comment,
+.hljs-quote {
+  color: #6a9955;
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #569cd6;
+}
+
+.hljs-string {
+  color: #ce9178;
+}
+
+.hljs-number {
+  color: #b5cea8;
+}
+
+.hljs-function {
+  color: #dcdcaa;
+}
+
+.hljs-title {
+  color: #4ec9b0;
+}
+
+.hljs-variable {
+  color: #9cdcfe;
+}
+
+.hljs-attr {
+  color: #9cdcfe;
+}
+

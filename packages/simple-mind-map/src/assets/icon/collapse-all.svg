@@ -1,0 +1,21 @@
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g id="collapse_all">
+    <!-- 顶部节点 -->
+    <rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor"/>
+    <!-- 连接线 -->
+    <path d="M12 6V9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- 中间分支点 -->
+    <circle cx="12" cy="9" r="1.5" fill="currentColor"/>
+    <!-- 左右分支线 -->
+    <path d="M12 9L7 12M12 9L17 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+    <!-- 左侧折叠的节点（带加号表示折叠状态） -->
+    <rect x="4" y="12" width="6" height="4" rx="1" fill="currentColor"/>
+    <path d="M7 13.5V14.5M6.5 14H7.5" stroke="white" stroke-width="1" stroke-linecap="round"/>
+    <!-- 右侧折叠的节点（带加号表示折叠状态） -->
+    <rect x="14" y="12" width="6" height="4" rx="1" fill="currentColor"/>
+    <path d="M17 13.5V14.5M16.5 14H17.5" stroke="white" stroke-width="1" stroke-linecap="round"/>
+    <!-- 收起指示箭头 -->
+    <path d="M7 17L7 19M6 18L7 19L8 18" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M17 17L17 19M16 18L17 19L18 18" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

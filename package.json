@@ -1,0 +1,19 @@
+{
+  "name": "mind-map-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mind map monorepo project",
+  "scripts": {
+    "dev": "pnpm --filter mind-map dev",
+    "build": "pnpm -r build",
+    "build:lib": "pnpm --filter simple-mind-map build",
+    "build:app": "pnpm --filter mind-map build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

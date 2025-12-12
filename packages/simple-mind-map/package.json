@@ -1,0 +1,32 @@
+{
+  "name": "hyy-mind-map",
+  "version": "0.0.0",
+  "description": "A simple mind map library",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "rslib build",
+    "dev": "rslib build --watch"
+  },
+  "keywords": [
+    "mind-map",
+    "mindmap"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@rslib/core": "^0.0.14",
+    "typescript": "^5.7.2"
+  }
+}
