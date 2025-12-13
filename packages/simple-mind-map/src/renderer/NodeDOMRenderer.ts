@@ -887,6 +887,8 @@ export class NodeDOMRenderer {
       
       // 标记是否在本次 mousedown 中设置了 lastClickedNodeId
       let justSetLastClickedNodeId = false;
+      // 保存编辑前的原始内容，用于判断是否有变化
+      let originalContent = '';
       
       // 检查是否允许进入编辑模式（需要先点击选中节点）
       const canEnterEditMode = (): boolean => {
@@ -894,6 +896,16 @@ export class NodeDOMRenderer {
         if (justSetLastClickedNodeId) return false;
         // 如果上次点击的是同一个节点，则允许进入编辑模式
         return this.lastClickedNodeId === nodeId;
+      };
+      
+      const enterEditMode = () => {
+        if (cellEl.contentEditable !== 'true') {
+          // 保存原始内容
+          originalContent = cellEl.textContent || '';
+          this.editingCellNodeId = nodeId;
+          cellEl.contentEditable = 'true';
+          cellEl.focus();
+        }
       };
       
       // mousedown 事件
@@ -915,9 +927,7 @@ export class NodeDOMRenderer {
         
         // 允许进入编辑模式，阻止冒泡
         e.stopPropagation();
-        this.editingCellNodeId = nodeId;
-        cellEl.contentEditable = 'true';
-        cellEl.focus();
+        enterEditMode();
       });
       
       // 单击定位光标到点击位置
@@ -930,10 +940,12 @@ export class NodeDOMRenderer {
         e.preventDefault();
         
         // 确保已经进入编辑模式
-        if (cellEl.contentEditable !== 'true') {
-          this.editingCellNodeId = nodeId;
-          cellEl.contentEditable = 'true';
-          cellEl.focus();
+        enterEditMode();
+        
+        // 如果用户已经通过拖拽选中了文字，不要重置光标位置
+        const selection = window.getSelection();
+        if (selection && selection.toString().length > 0) {
+          return;
         }
         
         // 将光标定位到点击位置
@@ -947,7 +959,11 @@ export class NodeDOMRenderer {
         // 清除编辑标记
         this.editingCellNodeId = null;
         
-        this.saveTableCell(nodeId, cellEl);
+        // 只在内容有变化时才保存
+        const newContent = cellEl.textContent || '';
+        if (newContent !== originalContent) {
+          this.saveTableCell(nodeId, cellEl, newContent);
+        }
       });
 
       // 回车键保存并移动到下一个单元格
@@ -977,20 +993,21 @@ export class NodeDOMRenderer {
   /**
    * 保存表格单元格内容
    */
-  private saveTableCell(nodeId: string, cell: HTMLElement): void {
+  private saveTableCell(nodeId: string, cell: HTMLElement, newContent: string): void {
     const rowIndex = parseInt(cell.dataset.row || '0', 10);
     const colIndex = parseInt(cell.dataset.col || '0', 10);
-    const newContent = cell.textContent || '';
 
     const node = this.nodeDataCache.get(nodeId);
     if (!node?.config?.attachment?.table) return;
 
     const table = node.config.attachment.table;
     if (table.rows[rowIndex] && table.rows[rowIndex][colIndex]) {
-      table.rows[rowIndex][colIndex].content = newContent;
-      
+      // 先调用回调保存历史（此时数据还是旧的），然后由回调来更新数据
       if (this.onTableUpdate) {
-        this.onTableUpdate(nodeId, table);
+        // 创建表格数据的深拷贝，然后在拷贝中更新内容
+        const updatedTable = JSON.parse(JSON.stringify(table));
+        updatedTable.rows[rowIndex][colIndex].content = newContent;
+        this.onTableUpdate(nodeId, updatedTable);
       }
     }
   }

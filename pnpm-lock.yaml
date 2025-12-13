@@ -46,6 +46,9 @@ importers:
       '@tiptap/starter-kit':
         specifier: ^3.13.0
         version: 3.13.0
+      hyy-mind-map:
+        specifier: workspace:*
+        version: link:../../packages/simple-mind-map
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -55,9 +58,6 @@ importers:
       react-dom:
         specifier: ^18.3.1
         version: 18.3.1(react@18.3.1)
-      simple-mind-map:
-        specifier: workspace:*
-        version: link:../../packages/simple-mind-map
     devDependencies:
       '@rsbuild/core':
         specifier: ^1.1.10

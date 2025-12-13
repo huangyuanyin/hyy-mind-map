@@ -103,6 +103,20 @@ export class DeleteNodeCommand extends BaseNodeCommand {
     const allSelectedNodes = this.mindMap.getAllSelectedNodes();
     if (allSelectedNodes.length === 0) return;
 
+    // 检查是否有节点带有附件（表格或代码块）
+    const nodesWithAttachment = allSelectedNodes.filter(
+      (node) => node.config?.attachment
+    );
+
+    if (nodesWithAttachment.length > 0) {
+      this.mindMap.saveHistory('clearAttachment', '清空附件');
+      nodesWithAttachment.forEach((node) => {
+        this.mindMap.clearNodeAttachment(node.id);
+      });
+      return;
+    }
+
+    this.mindMap.saveHistory('deleteNode', '删除节点');
     const removedCount = this.mindMap.removeSelectedNodes();
     if (removedCount > 0) {
       console.log(`已删除 ${removedCount} 个节点`);
@@ -112,7 +126,8 @@ export class DeleteNodeCommand extends BaseNodeCommand {
   public canExecute(): boolean {
     const allSelectedNodes = this.mindMap.getAllSelectedNodes();
     if (allSelectedNodes.length === 0) return false;
-    return allSelectedNodes.some((node) => node.parent !== null);
+    // 有附件的节点可以执行（清空附件），或者非根节点可以执行（删除）
+    return allSelectedNodes.some((node) => node.config?.attachment || node.parent !== null);
   }
 }
 

@@ -549,8 +549,8 @@ function App() {
         type: 'table',
         table: {
           rows: [
-            [{ content: '标题1', isHeader: true }, { content: '标题2', isHeader: true }, { content: '标题3', isHeader: true }],
-            [{ content: '内容1' }, { content: '内容2' }, { content: '内容3' }],
+            [{ content: '', isHeader: true }, { content: '', isHeader: true }, { content: '', isHeader: true }],
+            [{ content: '' }, { content: '' }, { content: '' }],
           ]
         }
       };
