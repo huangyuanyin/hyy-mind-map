@@ -65,6 +65,8 @@ export class NodeDOMRenderer {
   private onClearAttachment: ClearAttachmentCallback | null = null;
   // 节点数据缓存（用于编辑时访问）
   private nodeDataCache: Map<string, HyyMindMapNode> = new Map();
+  // 记录 mousedown 时节点是否已选中（用于判断是否应该进入编辑模式）
+  private wasNodeSelectedOnMouseDown: Map<string, boolean> = new Map();
 
   constructor(container: HTMLElement, theme?: Partial<Theme>) {
     this.container = container;
@@ -282,8 +284,15 @@ export class NodeDOMRenderer {
       }
       
       const nodeId = element.dataset.nodeId;
-      if (nodeId && this.onNodeMouseDown) {
-        this.onNodeMouseDown(nodeId, e);
+      if (nodeId) {
+        // 在 mousedown 时保存节点的选中状态，用于后续 click 判断是否进入编辑模式
+        const cachedNode = this.nodeDataCache.get(nodeId);
+        const wasSelected = cachedNode && (cachedNode.isSelected || cachedNode.isActive);
+        this.wasNodeSelectedOnMouseDown.set(nodeId, !!wasSelected);
+        
+        if (this.onNodeMouseDown) {
+          this.onNodeMouseDown(nodeId, e);
+        }
       }
     });
 
@@ -970,17 +979,18 @@ export class NodeDOMRenderer {
     if ((contentContainer as any)[bindKey]) return;
     (contentContainer as any)[bindKey] = true;
 
-    // 点击内容区域进入编辑模式（当节点已选中时）
+    // 点击内容区域进入编辑模式（当节点在 mousedown 时已选中）
     contentContainer.addEventListener('click', (e) => {
-      // 从缓存获取节点数据来检查选中状态（比通过边框颜色判断更可靠）
-      const node = this.nodeDataCache.get(nodeId);
-      const isSelected = node && (node.isSelected || node.isActive);
+      // 检查节点在 mousedown 时是否已经被选中
+      const wasSelected = this.wasNodeSelectedOnMouseDown.get(nodeId) || false;
+      
+      // 清除保存的状态
+      this.wasNodeSelectedOnMouseDown.delete(nodeId);
 
-      if (isSelected) {
+      if (wasSelected) {
         e.stopPropagation();
         this.startEdit(nodeId, e.clientX, e.clientY);
       }
-      // 如果未选中，不阻止冒泡，让父元素的 click 事件处理选中逻辑
     });
   }
 
