@@ -225,6 +225,11 @@ export class CompositeRenderer implements IRenderer {
    * 复制到主Canvas
    */
   private copyToMainCanvas(dpr: number): void {
+    // 检查canvas尺寸是否有效
+    if (this.offscreenCanvas.width === 0 || this.offscreenCanvas.height === 0) {
+      return; // 跳过绘制
+    }
+
     this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.scale(dpr, dpr);
     this.ctx.fillStyle = this.theme.backgroundColor;

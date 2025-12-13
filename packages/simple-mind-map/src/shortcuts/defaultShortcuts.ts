@@ -1,5 +1,5 @@
 import { ShortcutContext, type ShortcutConfig } from './types';
-import type { HyyMindMap } from '../core/HyyMindMap';
+import type { MindMap } from '../MindMap';
 import type { ShortcutManager } from './ShortcutManager';
 import {
   InsertChildNodeCommand,
@@ -30,7 +30,7 @@ import {
  * @param getShortcutManager - 获取快捷键管理器的函数
  */
 export function createDefaultShortcuts(
-  mindMap: HyyMindMap,
+  mindMap: MindMap,
   getShortcutManager: () => ShortcutManager
 ): ShortcutConfig[] {
   return [

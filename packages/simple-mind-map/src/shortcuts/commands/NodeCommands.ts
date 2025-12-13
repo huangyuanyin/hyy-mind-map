@@ -1,5 +1,5 @@
 import type { Command } from '../types';
-import type { HyyMindMap } from '../../core/HyyMindMap';
+import type { MindMap } from '../../MindMap';
 import type { ShortcutManager } from '../ShortcutManager';
 import type { NodeData } from '../../types';
 
@@ -11,7 +11,7 @@ abstract class BaseNodeCommand implements Command {
   public abstract name: string;
   public abstract description: string;
 
-  constructor(protected mindMap: HyyMindMap) {}
+  constructor(protected mindMap: MindMap) {}
 
   public abstract execute(): void;
 
@@ -196,7 +196,7 @@ export class CopyNodeCommand extends BaseNodeCommand {
   public description = '复制当前选中的节点（包含所有子节点，支持批量复制）';
 
   constructor(
-    mindMap: HyyMindMap,
+    mindMap: MindMap,
     private getShortcutManager: () => ShortcutManager
   ) {
     super(mindMap);
@@ -230,7 +230,7 @@ export class PasteNodeCommand extends BaseNodeCommand {
   public description = '将剪贴板中的节点粘贴为当前节点的子节点（支持批量粘贴）';
 
   constructor(
-    mindMap: HyyMindMap,
+    mindMap: MindMap,
     private getShortcutManager: () => ShortcutManager
   ) {
     super(mindMap);
@@ -341,7 +341,7 @@ export class ExpandAllCommand implements Command {
   public name = '展开所有';
   public description = '展开所有节点';
 
-  constructor(private mindMap: HyyMindMap) {}
+  constructor(private mindMap: MindMap) {}
 
   public execute(): void {
     this.mindMap.expandAll();
@@ -360,7 +360,7 @@ export class CollapseAllCommand implements Command {
   public name = '折叠所有';
   public description = '折叠所有节点（保留第一层）';
 
-  constructor(private mindMap: HyyMindMap) {}
+  constructor(private mindMap: MindMap) {}
 
   public execute(): void {
     this.mindMap.collapseAll();
@@ -381,7 +381,7 @@ export class ToggleExpandAllCommand implements Command {
 
   private isAllExpanded = true;
 
-  constructor(private mindMap: HyyMindMap) {}
+  constructor(private mindMap: MindMap) {}
 
   public execute(): void {
     if (this.isAllExpanded) {

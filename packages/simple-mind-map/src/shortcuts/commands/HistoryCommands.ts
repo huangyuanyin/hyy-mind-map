@@ -1,5 +1,5 @@
 import type { Command } from '../types';
-import type { HyyMindMap } from '../../core/HyyMindMap';
+import type { MindMap } from '../../MindMap';
 
 /**
  * 撤销命令
@@ -10,7 +10,7 @@ export class UndoCommand implements Command {
   public name = '撤销';
   public description = '撤销上一步操作';
 
-  constructor(private mindMap: HyyMindMap) {}
+  constructor(private mindMap: MindMap) {}
 
   public execute(): void {
     this.mindMap.undo();
@@ -30,7 +30,7 @@ export class RedoCommand implements Command {
   public name = '重做';
   public description = '重做上一步被撤销的操作';
 
-  constructor(private mindMap: HyyMindMap) {}
+  constructor(private mindMap: MindMap) {}
 
   public execute(): void {
     this.mindMap.redo();

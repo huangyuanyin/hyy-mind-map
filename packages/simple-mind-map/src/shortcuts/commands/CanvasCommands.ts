@@ -1,5 +1,5 @@
 import type { Command } from '../types';
-import type { HyyMindMap } from '../../core/HyyMindMap';
+import type { MindMap } from '../../MindMap';
 
 /**
  * 画布操作命令基类
@@ -9,7 +9,7 @@ abstract class BaseCanvasCommand implements Command {
   public abstract name: string;
   public abstract description: string;
 
-  constructor(protected mindMap: HyyMindMap) {}
+  constructor(protected mindMap: MindMap) {}
 
   public abstract execute(): void;
 

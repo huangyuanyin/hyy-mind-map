@@ -429,12 +429,17 @@ export class StateManager {
 
   /**
    * 订阅状态变更
+   * @returns 取消订阅的函数
    */
-  on(event: StateChangeEvent, listener: StateChangeListener): void {
+  on(event: StateChangeEvent, listener: StateChangeListener): () => void {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(listener);
+
+    return () => {
+      this.off(event, listener);
+    };
   }
 
   /**

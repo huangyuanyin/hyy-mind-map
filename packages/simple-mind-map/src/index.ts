@@ -1,10 +1,6 @@
 // ==================== 核心类 ====================
-// MindMap 主类
 export { MindMap } from './MindMap';
 export type { MindMapOptions } from './MindMap';
-
-// 旧的 HyyMindMap（已废弃，保留用于兼容）
-export { HyyMindMap } from './core/HyyMindMap';
 
 // 核心组件
 export { HyyMindMapNode } from './core/HyyMindMapNode';

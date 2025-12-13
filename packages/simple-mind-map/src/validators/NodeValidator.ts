@@ -1,11 +1,7 @@
 import type { HyyMindMapNode } from '../core/HyyMindMapNode';
 import type { NodeData } from '../types';
 import { TreeUtils } from '../utils/TreeUtils';
-
-export interface ValidationResult {
-  valid: boolean;
-  error?: string;
-}
+import type { ValidationResult } from './index';
 
 export class NodeValidator {
   /**

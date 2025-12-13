@@ -1,10 +1,6 @@
 import type { ViewState } from '../types';
 import { ZOOM } from '../constants';
-
-export interface ValidationResult {
-  valid: boolean;
-  error?: string;
-}
+import type { ValidationResult } from './index';
 
 export class ViewValidator {
   /**

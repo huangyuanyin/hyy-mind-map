@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { HyyMindMap } from 'simple-mind-map';
+import { MindMap } from 'simple-mind-map';
 import type { NodeData } from 'simple-mind-map';
 import { Menu } from '@arco-design/web-react';
 import '@arco-design/web-react/dist/css/arco.css';
@@ -9,7 +9,7 @@ import './App.css';
 
 function App() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mindMapRef = useRef<HyyMindMap | null>(null);
+  const mindMapRef = useRef<MindMap | null>(null);
   const [scale, setScale] = useState<number>(1);
   const [contextMenuVisible, setContextMenuVisible] = useState<boolean>(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -105,13 +105,21 @@ function App() {
     const data = loadData();
 
     // 创建思维导图实例（启用 DOM 节点渲染以支持双击编辑）
-    const mindMap = new HyyMindMap({
+    const mindMap = new MindMap({
       container: containerRef.current,
       data,
       useDOMNodes: true,
+      enableShortcuts: true,
     });
 
     mindMapRef.current = mindMap;
+
+    // === DEBUG: 测试 window 键盘事件 ===
+    const debugKeyHandler = (e: KeyboardEvent) => {
+      console.log('[DEBUG App] Window keydown:', e.key, 'Meta:', e.metaKey, 'Ctrl:', e.ctrlKey);
+    };
+    window.addEventListener('keydown', debugKeyHandler);
+    // === END DEBUG ===
 
     // 恢复视图状态（缩放和平移）
     try {
@@ -119,15 +127,14 @@ function App() {
       if (savedViewState) {
         const viewState = JSON.parse(savedViewState);
         if (viewState.scale) {
-          mindMap.setScale(viewState.scale);
+          mindMap.viewService.setScale(viewState.scale);
         }
         if (viewState.translateX !== undefined && viewState.translateY !== undefined) {
-          // 需要添加 setTranslate 方法到 HyyMindMap
-          (mindMap as any).viewState = {
+          mindMap.getStateManager().setViewState({
             scale: viewState.scale || 1,
             translateX: viewState.translateX || 0,
             translateY: viewState.translateY || 0,
-          };
+          });
           mindMap.render();
         }
       }
@@ -135,29 +142,34 @@ function App() {
       console.error('Failed to restore view state:', error);
     }
 
-    // 监听缩放变化
-    const unsubscribe = mindMap.onScaleChange((newScale) => {
-      setScale(newScale);
+    // 监听缩放和选择变化
+    const stateManager = mindMap.getStateManager();
+
+    const unsubscribeView = stateManager.on('view:change', (state) => {
+      setScale(state.view.scale);
     });
 
     // 监听节点选中状态，更新工具栏状态
     const updateToolbarState = () => {
-      const selectedNode = mindMap.getSelectedNode();
+      const state = stateManager.getState();
+      const selectedNode = state.selection.activeNode;
+
       if (selectedNode) {
         setHasSelectedNode(true);
         setActiveNodeId(selectedNode.id);
         setIsRootNode(selectedNode.parent === null || selectedNode.parent === undefined);
+
         // 获取节点样式
-        const style = mindMap.getNodeStyle(selectedNode.id);
-        if (style) {
+        const nodeConfig = selectedNode.config;
+        if (nodeConfig) {
           setNodeStyle({
-            backgroundColor: style.backgroundColor,
-            textColor: style.textColor,
-            fontSize: style.fontSize,
-            bold: style.bold,
-            italic: style.italic,
-            underline: style.underline,
-            strikethrough: style.strikethrough,
+            backgroundColor: nodeConfig.backgroundColor,
+            textColor: nodeConfig.textColor,
+            fontSize: nodeConfig.fontSize,
+            bold: nodeConfig.bold,
+            italic: nodeConfig.italic,
+            underline: nodeConfig.underline,
+            strikethrough: nodeConfig.strikethrough,
           });
         } else {
           setNodeStyle({});
@@ -170,9 +182,7 @@ function App() {
       }
     };
 
-    (mindMap as any).eventSystem.on('node_click', updateToolbarState);
-    (mindMap as any).eventSystem.on('canvas_click', updateToolbarState);
-    (mindMap as any).eventSystem.on('selection_changed', updateToolbarState);
+    const unsubscribeSelection = stateManager.on('selection:change', updateToolbarState);
 
     // 初始化时更新工具栏状态
     updateToolbarState();
@@ -185,10 +195,11 @@ function App() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(currentData));
 
         // 保存视图状态
+        const state = stateManager.getState();
         const viewState = {
-          scale: mindMap.getScale(),
-          translateX: (mindMap as any).viewState.translateX,
-          translateY: (mindMap as any).viewState.translateY,
+          scale: state.view.scale,
+          translateX: state.view.translateX,
+          translateY: state.view.translateY,
         };
         localStorage.setItem(VIEW_STATE_KEY, JSON.stringify(viewState));
 
@@ -198,19 +209,24 @@ function App() {
       }
     };
 
-    // 监听数据变化并保存（使用防抖以避免过于频繁的保存）
+    // 监听视图和选择变化并保存
     let saveTimeout: NodeJS.Timeout;
     const debouncedSave = () => {
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(saveData, 500); // 500ms 防抖
     };
 
-    (mindMap as any).eventSystem.on('render_needed', debouncedSave);
+    const unsubscribeViewSave = stateManager.on('view:change', debouncedSave);
+    const unsubscribeSelectionSave = stateManager.on('selection:change', debouncedSave);
 
     // 清理函数
     return () => {
       clearTimeout(saveTimeout);
-      unsubscribe();
+      unsubscribeView();
+      unsubscribeSelection();
+      unsubscribeViewSave();
+      unsubscribeSelectionSave();
+      window.removeEventListener('keydown', debugKeyHandler);
       mindMap.destroy();
     };
   }, []);
@@ -218,16 +234,14 @@ function App() {
   // 放大
   const handleZoomIn = () => {
     if (mindMapRef.current) {
-      const currentScale = mindMapRef.current.getScale();
-      mindMapRef.current.setScale(currentScale + 0.1);
+      mindMapRef.current.viewService.zoomIn();
     }
   };
 
   // 缩小
   const handleZoomOut = () => {
     if (mindMapRef.current) {
-      const currentScale = mindMapRef.current.getScale();
-      mindMapRef.current.setScale(currentScale - 0.1);
+      mindMapRef.current.viewService.zoomOut();
     }
   };
 
@@ -237,8 +251,9 @@ function App() {
 
     // 判断是否点击在节点上
     if (mindMapRef.current) {
-      const selectedNode = mindMapRef.current.getSelectedNode();
-      const hasSelectedNodes = mindMapRef.current.getAllSelectedNodes().length > 0;
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNode = state.selection.activeNode;
+      const hasSelectedNodes = state.selection.selectedNodes.size > 0;
 
       if (selectedNode || hasSelectedNodes) {
         setContextMenuType('node');
@@ -260,7 +275,7 @@ function App() {
   // 回到根节点
   const handleCenterOnRoot = () => {
     if (mindMapRef.current) {
-      mindMapRef.current.centerOnRoot();
+      mindMapRef.current.viewService.centerOnRoot();
     }
     setContextMenuVisible(false);
   };
@@ -268,7 +283,17 @@ function App() {
   // 展开所有节点
   const handleExpandAll = () => {
     if (mindMapRef.current) {
-      mindMapRef.current.expandAll();
+      const root = mindMapRef.current.getRoot();
+      if (root) {
+        const expandRecursive = (node: any) => {
+          node.expanded = true;
+          if (node.children) {
+            node.children.forEach(expandRecursive);
+          }
+        };
+        expandRecursive(root);
+        mindMapRef.current.relayout();
+      }
     }
     setContextMenuVisible(false);
   };
@@ -276,7 +301,19 @@ function App() {
   // 折叠所有节点
   const handleCollapseAll = () => {
     if (mindMapRef.current) {
-      mindMapRef.current.collapseAll();
+      const root = mindMapRef.current.getRoot();
+      if (root && root.children) {
+        root.children.forEach((child: any) => {
+          const collapseRecursive = (node: any) => {
+            node.expanded = false;
+            if (node.children) {
+              node.children.forEach(collapseRecursive);
+            }
+          };
+          collapseRecursive(child);
+        });
+        mindMapRef.current.relayout();
+      }
     }
     setContextMenuVisible(false);
   };
@@ -284,7 +321,18 @@ function App() {
   // 删除选中的节点
   const handleDeleteSelected = () => {
     if (mindMapRef.current) {
-      const count = mindMapRef.current.removeSelectedNodes();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNodes = Array.from(state.selection.selectedNodes);
+      let count = 0;
+
+      selectedNodes.forEach((node) => {
+        const result = mindMapRef.current!.nodeService.removeNode(node.id);
+        if (result.success) count++;
+      });
+
+      if (count > 0) {
+        mindMapRef.current.relayout();
+      }
       console.log(`已删除 ${count} 个节点`);
     }
   };
@@ -292,7 +340,17 @@ function App() {
   // 复制选中的节点
   const handleCopySelected = () => {
     if (mindMapRef.current) {
-      const copiedData = mindMapRef.current.copySelectedNodes();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNodes = Array.from(state.selection.selectedNodes);
+      const copiedData = selectedNodes.map(node => node.toData());
+
+      // 保存到快捷键管理器的剪贴板
+      const shortcutManager = mindMapRef.current.getShortcutManager();
+      shortcutManager.setClipboard({
+        type: 'nodes',
+        data: copiedData,
+      });
+
       console.log('已复制节点数据:', copiedData);
       alert(`已复制 ${copiedData.length} 个节点到剪贴板`);
     }
@@ -301,9 +359,11 @@ function App() {
   // 插入子节点
   const handleInsertChild = () => {
     if (mindMapRef.current) {
-      const selectedNode = mindMapRef.current.getSelectedNode();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNode = state.selection.activeNode;
       if (selectedNode) {
-        mindMapRef.current.addNode(selectedNode.id, '新子节点');
+        mindMapRef.current.nodeService.addNode(selectedNode.id, '新子节点');
+        mindMapRef.current.relayout();
       }
     }
     setContextMenuVisible(false);
@@ -313,9 +373,11 @@ function App() {
   const handleInsertSibling = () => {
     if (isRootNode) return;
     if (mindMapRef.current) {
-      const selectedNode = mindMapRef.current.getSelectedNode();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNode = state.selection.activeNode;
       if (selectedNode && selectedNode.parent) {
-        (mindMapRef.current as any).insertSiblingNode(selectedNode.id, '新同级节点');
+        mindMapRef.current.nodeService.insertSiblingNode(selectedNode.id, '新同级节点');
+        mindMapRef.current.relayout();
       }
     }
     setContextMenuVisible(false);
@@ -325,9 +387,11 @@ function App() {
   const handleInsertParent = () => {
     if (isRootNode) return;
     if (mindMapRef.current) {
-      const selectedNode = mindMapRef.current.getSelectedNode();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNode = state.selection.activeNode;
       if (selectedNode && selectedNode.parent) {
-        (mindMapRef.current as any).insertParentNode(selectedNode.id, '新父节点');
+        mindMapRef.current.nodeService.insertParentNode(selectedNode.id, '新父节点');
+        mindMapRef.current.relayout();
       }
     }
     setContextMenuVisible(false);
@@ -337,7 +401,18 @@ function App() {
   const handleDeleteNode = () => {
     if (isRootNode) return;
     if (mindMapRef.current) {
-      const count = mindMapRef.current.removeSelectedNodes();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNodes = Array.from(state.selection.selectedNodes);
+      let count = 0;
+
+      selectedNodes.forEach((node) => {
+        const result = mindMapRef.current!.nodeService.removeNode(node.id);
+        if (result.success) count++;
+      });
+
+      if (count > 0) {
+        mindMapRef.current.relayout();
+      }
       console.log(`已删除 ${count} 个节点`);
     }
     setContextMenuVisible(false);
@@ -346,10 +421,12 @@ function App() {
   // 复制节点（右键菜单）
   const handleCopyNode = () => {
     if (mindMapRef.current) {
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNodes = Array.from(state.selection.selectedNodes);
+      const copiedData = selectedNodes.map(node => node.toData());
+
       // 使用快捷键管理器的剪贴板
       const shortcutManager = mindMapRef.current.getShortcutManager();
-      const copiedData = mindMapRef.current.copySelectedNodes();
-
       shortcutManager.setClipboard({
         type: 'nodes',
         data: copiedData,
@@ -364,7 +441,8 @@ function App() {
   const handlePasteNode = () => {
     if (!canPaste) return;
     if (mindMapRef.current) {
-      const selectedNode = mindMapRef.current.getSelectedNode();
+      const state = mindMapRef.current.getStateManager().getState();
+      const selectedNode = state.selection.activeNode;
       if (!selectedNode) return;
 
       const shortcutManager = mindMapRef.current.getShortcutManager();
@@ -381,9 +459,12 @@ function App() {
 
       // 粘贴所有节点（包含子节点）
       nodesToPaste.forEach((nodeData: any) => {
-        mindMapRef.current!.pasteNodeData(selectedNode.id, nodeData);
+        mindMapRef.current!.nodeService.pasteNodeData(selectedNode.id, nodeData);
       });
 
+      if (nodesToPaste.length > 0) {
+        mindMapRef.current.relayout();
+      }
       console.log(`已粘贴 ${nodesToPaste.length} 个节点`);
     }
     setContextMenuVisible(false);
@@ -392,9 +473,12 @@ function App() {
   // 工具栏 - 删除节点
   const handleToolbarDelete = () => {
     if (!hasSelectedNode || isRootNode) return;
-    if (mindMapRef.current) {
-      const count = mindMapRef.current.removeSelectedNodes();
-      console.log(`已删除 ${count} 个节点`);
+    if (mindMapRef.current && activeNodeId) {
+      const result = mindMapRef.current.nodeService.removeNode(activeNodeId);
+      if (result.success) {
+        mindMapRef.current.relayout();
+        console.log(`已删除节点`);
+      }
     }
   };
 
@@ -402,7 +486,8 @@ function App() {
   const handleToolbarAddChild = () => {
     if (!hasSelectedNode) return;
     if (mindMapRef.current && activeNodeId) {
-      mindMapRef.current.addNode(activeNodeId, '新子节点');
+      mindMapRef.current.nodeService.addNode(activeNodeId, '新子节点');
+      mindMapRef.current.relayout();
     }
   };
 
@@ -410,7 +495,8 @@ function App() {
   const handleToolbarAddSibling = () => {
     if (!hasSelectedNode || isRootNode) return;
     if (mindMapRef.current && activeNodeId) {
-      (mindMapRef.current as any).insertSiblingNode(activeNodeId, '新同级节点');
+      mindMapRef.current.nodeService.insertSiblingNode(activeNodeId, '新同级节点');
+      mindMapRef.current.relayout();
     }
   };
 
@@ -431,41 +517,73 @@ function App() {
     strikethrough?: boolean;
   }) => {
     if (!mindMapRef.current) return;
-    mindMapRef.current.updateNodeStyle(nodeId, style);
-    // 更新本地状态
-    setNodeStyle(prev => ({ ...prev, ...style }));
+
+    const node = mindMapRef.current.getNodeManager().findNode(nodeId);
+    if (node) {
+      if (!node.config) {
+        node.config = {};
+      }
+      Object.assign(node.config, style);
+      mindMapRef.current.relayout();
+      // 更新本地状态
+      setNodeStyle(prev => ({ ...prev, ...style }));
+    }
   };
 
   // 处理插入表格
   const handleInsertTable = (nodeId: string) => {
     if (!mindMapRef.current) return;
-    
-    // 创建一个默认的 2x3 表格
-    const defaultTable = {
-      rows: [
-        [{ content: '标题1', isHeader: true }, { content: '标题2', isHeader: true }, { content: '标题3', isHeader: true }],
-        [{ content: '内容1' }, { content: '内容2' }, { content: '内容3' }],
-      ]
-    };
-    
-    mindMapRef.current.setNodeTable(nodeId, defaultTable);
+
+    const node = mindMapRef.current.getNodeManager().findNode(nodeId);
+    if (node) {
+      if (!node.config) {
+        node.config = {};
+      }
+
+      // 创建一个默认的 2x3 表格
+      node.config.attachment = {
+        type: 'table',
+        table: {
+          rows: [
+            [{ content: '标题1', isHeader: true }, { content: '标题2', isHeader: true }, { content: '标题3', isHeader: true }],
+            [{ content: '内容1' }, { content: '内容2' }, { content: '内容3' }],
+          ]
+        }
+      };
+
+      mindMapRef.current.relayout();
+    }
   };
 
   // 处理插入代码块
   const handleInsertCodeBlock = (nodeId: string) => {
     if (!mindMapRef.current) return;
-    
+
+    const node = mindMapRef.current.getNodeManager().findNode(nodeId);
+    if (!node) return;
+
     // 获取节点当前的文本内容
-    const selectedNode = mindMapRef.current.getSelectedNode();
-    const nodeText = selectedNode?.text || selectedNode?.richContent?.text || '';
-    
+    const nodeText = node.text || node.richContent?.text || '';
+
     // 如果节点无内容，不执行任何操作
     if (!nodeText.trim()) {
       return;
     }
-    
+
+    if (!node.config) {
+      node.config = {};
+    }
+
     // 使用节点的文本内容作为代码块内容
-    mindMapRef.current.setNodeCodeBlock(nodeId, nodeText, 'javascript');
+    node.config.attachment = {
+      type: 'code',
+      codeBlock: {
+        code: nodeText,
+        language: 'javascript'
+      }
+    };
+
+    mindMapRef.current.relayout();
   };
 
   // 处理图标选择
@@ -473,12 +591,12 @@ function App() {
     if (!mindMapRef.current || !activeNodeId) return;
 
     // 更新节点配置
-    const selectedNode = mindMapRef.current.getSelectedNode();
-    if (selectedNode) {
-      selectedNode.config = {
-        ...selectedNode.config,
-        icons: icons, // 存储多个图标
-      };
+    const node = mindMapRef.current.getNodeManager().findNode(activeNodeId);
+    if (node) {
+      if (!node.config) {
+        node.config = {};
+      }
+      node.config.icons = icons; // 存储多个图标
       // 重新计算布局以更新节点宽度
       mindMapRef.current.relayout();
     }
@@ -560,7 +678,7 @@ function App() {
             }}
           >
             <svg width="18" height="18" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-              <path d="M6 2v1H3v1h10V3h-3V2H6zm-1 3v8h6V5H5zm2 1h1v6H7V6zm2 0h1v6H9V6z" fill="#ff4d4f"/>
+              <path d="M6 2v1H3v1h10V3h-3V2H6zm-1 3v8h6V5H5zm2 1h1v6H7V6zm2 0h1v6H9V6z" fill="#ff4d4f" />
             </svg>
             <span style={{ fontSize: '12px', color: '#262626', whiteSpace: 'nowrap', fontWeight: 500 }}>删除节点</span>
           </button>
@@ -599,7 +717,7 @@ function App() {
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <g>
-                <path fillRule="evenodd" clipRule="evenodd" d="M5.0592 8.25111H6.99529C7.34441 9.11763 8.18995 9.72889 9.1776 9.72889C10.4773 9.72889 11.531 8.67029 11.531 7.36444C11.531 6.0586 10.4773 5 9.1776 5C8.18995 5 7.34441 5.61126 6.99529 6.47778H5.0592C3.92193 6.47778 3 7.40405 3 8.54667V14.4578C3 15.6004 3.92193 16.5267 5.0592 16.5267H6.79481V17.7933C6.79481 18.901 7.69273 19.7989 8.80036 19.7989H18.9683C20.0759 19.7989 20.9739 18.901 20.9739 17.7933V13.4867C20.9739 12.379 20.0759 11.4811 18.9683 11.4811H8.80036C7.69273 11.4811 6.79481 12.379 6.79481 13.4867V14.7533H5.0592C4.89673 14.7533 4.76503 14.621 4.76503 14.4578V8.54667C4.76503 8.38344 4.89673 8.25111 5.0592 8.25111ZM8.80036 13.2756H18.9683C19.0849 13.2756 19.1794 13.3701 19.1794 13.4867V17.7933C19.1794 17.9099 19.0849 18.0044 18.9683 18.0044H8.80036C8.68377 18.0044 8.58925 17.9099 8.58925 17.7933V13.4867C8.58925 13.3701 8.68377 13.2756 8.80036 13.2756Z" fill="currentColor"/>
+                <path fillRule="evenodd" clipRule="evenodd" d="M5.0592 8.25111H6.99529C7.34441 9.11763 8.18995 9.72889 9.1776 9.72889C10.4773 9.72889 11.531 8.67029 11.531 7.36444C11.531 6.0586 10.4773 5 9.1776 5C8.18995 5 7.34441 5.61126 6.99529 6.47778H5.0592C3.92193 6.47778 3 7.40405 3 8.54667V14.4578C3 15.6004 3.92193 16.5267 5.0592 16.5267H6.79481V17.7933C6.79481 18.901 7.69273 19.7989 8.80036 19.7989H18.9683C20.0759 19.7989 20.9739 18.901 20.9739 17.7933V13.4867C20.9739 12.379 20.0759 11.4811 18.9683 11.4811H8.80036C7.69273 11.4811 6.79481 12.379 6.79481 13.4867V14.7533H5.0592C4.89673 14.7533 4.76503 14.621 4.76503 14.4578V8.54667C4.76503 8.38344 4.89673 8.25111 5.0592 8.25111ZM8.80036 13.2756H18.9683C19.0849 13.2756 19.1794 13.3701 19.1794 13.4867V17.7933C19.1794 17.9099 19.0849 18.0044 18.9683 18.0044H8.80036C8.68377 18.0044 8.58925 17.9099 8.58925 17.7933V13.4867C8.58925 13.3701 8.68377 13.2756 8.80036 13.2756Z" fill="currentColor" />
               </g>
             </svg>
             <span style={{ fontSize: '12px', color: '#262626', whiteSpace: 'nowrap', fontWeight: 500 }}>同级节点</span>
@@ -639,8 +757,8 @@ function App() {
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <g>
-                <path fillRule="evenodd" clipRule="evenodd" d="M7.59009 10.375C7.59009 9.06332 8.66299 8 9.98649 8H20.7703C22.0938 8 23.1667 9.06332 23.1667 10.375V15.125C23.1667 16.4367 22.0938 17.5 20.7703 17.5H9.98649C8.66299 17.5 7.59009 16.4367 7.59009 15.125V10.375ZM9.98649 9.78125H20.7703C21.1011 9.78125 21.3694 10.0471 21.3694 10.375V15.125C21.3694 15.4529 21.1011 15.7188 20.7703 15.7188H9.98649C9.65561 15.7188 9.38739 15.4529 9.38739 15.125V10.375C9.38739 10.0471 9.65561 9.78125 9.98649 9.78125Z" fill="currentColor"/>
-                <path d="M5.61861 13.6406C5.26312 14.511 4.40211 15.125 3.3964 15.125C2.0729 15.125 1 14.0617 1 12.75C1 11.4383 2.0729 10.375 3.3964 10.375C4.40209 10.375 5.26309 10.989 5.61859 11.8594L7.59006 11.8594L7.59004 13.6406L5.61861 13.6406Z" fill="currentColor"/>
+                <path fillRule="evenodd" clipRule="evenodd" d="M7.59009 10.375C7.59009 9.06332 8.66299 8 9.98649 8H20.7703C22.0938 8 23.1667 9.06332 23.1667 10.375V15.125C23.1667 16.4367 22.0938 17.5 20.7703 17.5H9.98649C8.66299 17.5 7.59009 16.4367 7.59009 15.125V10.375ZM9.98649 9.78125H20.7703C21.1011 9.78125 21.3694 10.0471 21.3694 10.375V15.125C21.3694 15.4529 21.1011 15.7188 20.7703 15.7188H9.98649C9.65561 15.7188 9.38739 15.4529 9.38739 15.125V10.375C9.38739 10.0471 9.65561 9.78125 9.98649 9.78125Z" fill="currentColor" />
+                <path d="M5.61861 13.6406C5.26312 14.511 4.40211 15.125 3.3964 15.125C2.0729 15.125 1 14.0617 1 12.75C1 11.4383 2.0729 10.375 3.3964 10.375C4.40209 10.375 5.26309 10.989 5.61859 11.8594L7.59006 11.8594L7.59004 13.6406L5.61861 13.6406Z" fill="currentColor" />
               </g>
             </svg>
             <span style={{ fontSize: '12px', color: '#262626', whiteSpace: 'nowrap', fontWeight: 500 }}>子节点</span>
@@ -679,9 +797,9 @@ function App() {
             }}
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C10.3431 2 9 3.34315 9 5C9 6.65685 10.3431 8 12 8C13.6569 8 15 6.65685 15 5C15 3.34315 13.6569 2 12 2Z" fill="currentColor"/>
-              <path d="M7 14C5.34315 14 4 15.3431 4 17C4 18.6569 5.34315 20 7 20C8.65685 20 10 18.6569 10 17C10 15.3431 8.65685 14 7 14Z" fill="currentColor"/>
-              <path d="M14 17C14 15.3431 15.3431 14 17 14C18.6569 14 20 15.3431 20 17C20 18.6569 18.6569 20 17 20C15.3431 20 14 18.6569 14 17Z" fill="currentColor"/>
+              <path d="M12 2C10.3431 2 9 3.34315 9 5C9 6.65685 10.3431 8 12 8C13.6569 8 15 6.65685 15 5C15 3.34315 13.6569 2 12 2Z" fill="currentColor" />
+              <path d="M7 14C5.34315 14 4 15.3431 4 17C4 18.6569 5.34315 20 7 20C8.65685 20 10 18.6569 10 17C10 15.3431 8.65685 14 7 14Z" fill="currentColor" />
+              <path d="M14 17C14 15.3431 15.3431 14 17 14C18.6569 14 20 15.3431 20 17C20 18.6569 18.6569 20 17 20C15.3431 20 14 18.6569 14 17Z" fill="currentColor" />
             </svg>
             <span style={{ fontSize: '12px', color: '#262626', whiteSpace: 'nowrap', fontWeight: 500 }}>图标</span>
           </button>
@@ -730,7 +848,7 @@ function App() {
             title="缩小 (10%)"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M3 8H13" stroke="#333" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M3 8H13" stroke="#333" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
 
@@ -775,7 +893,7 @@ function App() {
             title="放大 (10%)"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M8 3V13M3 8H13" stroke="#333" strokeWidth="2" strokeLinecap="round"/>
+              <path d="M8 3V13M3 8H13" stroke="#333" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
@@ -810,8 +928,8 @@ function App() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                           <g>
-                            <path fillRule="evenodd" clipRule="evenodd" d="M7.59009 10.375C7.59009 9.06332 8.66299 8 9.98649 8H20.7703C22.0938 8 23.1667 9.06332 23.1667 10.375V15.125C23.1667 16.4367 22.0938 17.5 20.7703 17.5H9.98649C8.66299 17.5 7.59009 16.4367 7.59009 15.125V10.375ZM9.98649 9.78125H20.7703C21.1011 9.78125 21.3694 10.0471 21.3694 10.375V15.125C21.3694 15.4529 21.1011 15.7188 20.7703 15.7188H9.98649C9.65561 15.7188 9.38739 15.4529 9.38739 15.125V10.375C9.38739 10.0471 9.65561 9.78125 9.98649 9.78125Z" fill="currentColor"/>
-                            <path d="M5.61861 13.6406C5.26312 14.511 4.40211 15.125 3.3964 15.125C2.0729 15.125 1 14.0617 1 12.75C1 11.4383 2.0729 10.375 3.3964 10.375C4.40209 10.375 5.26309 10.989 5.61859 11.8594L7.59006 11.8594L7.59004 13.6406L5.61861 13.6406Z" fill="currentColor"/>
+                            <path fillRule="evenodd" clipRule="evenodd" d="M7.59009 10.375C7.59009 9.06332 8.66299 8 9.98649 8H20.7703C22.0938 8 23.1667 9.06332 23.1667 10.375V15.125C23.1667 16.4367 22.0938 17.5 20.7703 17.5H9.98649C8.66299 17.5 7.59009 16.4367 7.59009 15.125V10.375ZM9.98649 9.78125H20.7703C21.1011 9.78125 21.3694 10.0471 21.3694 10.375V15.125C21.3694 15.4529 21.1011 15.7188 20.7703 15.7188H9.98649C9.65561 15.7188 9.38739 15.4529 9.38739 15.125V10.375C9.38739 10.0471 9.65561 9.78125 9.98649 9.78125Z" fill="currentColor" />
+                            <path d="M5.61861 13.6406C5.26312 14.511 4.40211 15.125 3.3964 15.125C2.0729 15.125 1 14.0617 1 12.75C1 11.4383 2.0729 10.375 3.3964 10.375C4.40209 10.375 5.26309 10.989 5.61859 11.8594L7.59006 11.8594L7.59004 13.6406L5.61861 13.6406Z" fill="currentColor" />
                           </g>
                         </svg>
                         插入子节点
@@ -829,7 +947,7 @@ function App() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                           <g>
-                            <path fillRule="evenodd" clipRule="evenodd" d="M5.0592 8.25111H6.99529C7.34441 9.11763 8.18995 9.72889 9.1776 9.72889C10.4773 9.72889 11.531 8.67029 11.531 7.36444C11.531 6.0586 10.4773 5 9.1776 5C8.18995 5 7.34441 5.61126 6.99529 6.47778H5.0592C3.92193 6.47778 3 7.40405 3 8.54667V14.4578C3 15.6004 3.92193 16.5267 5.0592 16.5267H6.79481V17.7933C6.79481 18.901 7.69273 19.7989 8.80036 19.7989H18.9683C20.0759 19.7989 20.9739 18.901 20.9739 17.7933V13.4867C20.9739 12.379 20.0759 11.4811 18.9683 11.4811H8.80036C7.69273 11.4811 6.79481 12.379 6.79481 13.4867V14.7533H5.0592C4.89673 14.7533 4.76503 14.621 4.76503 14.4578V8.54667C4.76503 8.38344 4.89673 8.25111 5.0592 8.25111ZM8.80036 13.2756H18.9683C19.0849 13.2756 19.1794 13.3701 19.1794 13.4867V17.7933C19.1794 17.9099 19.0849 18.0044 18.9683 18.0044H8.80036C8.68377 18.0044 8.58925 17.9099 8.58925 17.7933V13.4867C8.58925 13.3701 8.68377 13.2756 8.80036 13.2756Z" fill="currentColor"/>
+                            <path fillRule="evenodd" clipRule="evenodd" d="M5.0592 8.25111H6.99529C7.34441 9.11763 8.18995 9.72889 9.1776 9.72889C10.4773 9.72889 11.531 8.67029 11.531 7.36444C11.531 6.0586 10.4773 5 9.1776 5C8.18995 5 7.34441 5.61126 6.99529 6.47778H5.0592C3.92193 6.47778 3 7.40405 3 8.54667V14.4578C3 15.6004 3.92193 16.5267 5.0592 16.5267H6.79481V17.7933C6.79481 18.901 7.69273 19.7989 8.80036 19.7989H18.9683C20.0759 19.7989 20.9739 18.901 20.9739 17.7933V13.4867C20.9739 12.379 20.0759 11.4811 18.9683 11.4811H8.80036C7.69273 11.4811 6.79481 12.379 6.79481 13.4867V14.7533H5.0592C4.89673 14.7533 4.76503 14.621 4.76503 14.4578V8.54667C4.76503 8.38344 4.89673 8.25111 5.0592 8.25111ZM8.80036 13.2756H18.9683C19.0849 13.2756 19.1794 13.3701 19.1794 13.4867V17.7933C19.1794 17.9099 19.0849 18.0044 18.9683 18.0044H8.80036C8.68377 18.0044 8.58925 17.9099 8.58925 17.7933V13.4867C8.58925 13.3701 8.68377 13.2756 8.80036 13.2756Z" fill="currentColor" />
                           </g>
                         </svg>
                         插入同级节点
@@ -847,9 +965,9 @@ function App() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                           <g>
-                            <path fillRule="evenodd" clipRule="evenodd" d="M7.59009 4.375C7.59009 3.06332 8.66299 2 9.98649 2H20.7703C22.0938 2 23.1667 3.06332 23.1667 4.375V9.125C23.1667 10.4367 22.0938 11.5 20.7703 11.5H9.98649C8.66299 11.5 7.59009 10.4367 7.59009 9.125V4.375ZM9.98649 3.78125H20.7703C21.1011 3.78125 21.3694 4.0471 21.3694 4.375V9.125C21.3694 9.4529 21.1011 9.71875 20.7703 9.71875H9.98649C9.65561 9.71875 9.38739 9.4529 9.38739 9.125V4.375C9.38739 4.0471 9.65561 3.78125 9.98649 3.78125Z" fill="currentColor"/>
-                            <circle cx="15.3784" cy="19" r="2.5" fill="currentColor"/>
-                            <path d="M15.3784 11.5V16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+                            <path fillRule="evenodd" clipRule="evenodd" d="M7.59009 4.375C7.59009 3.06332 8.66299 2 9.98649 2H20.7703C22.0938 2 23.1667 3.06332 23.1667 4.375V9.125C23.1667 10.4367 22.0938 11.5 20.7703 11.5H9.98649C8.66299 11.5 7.59009 10.4367 7.59009 9.125V4.375ZM9.98649 3.78125H20.7703C21.1011 3.78125 21.3694 4.0471 21.3694 4.375V9.125C21.3694 9.4529 21.1011 9.71875 20.7703 9.71875H9.98649C9.65561 9.71875 9.38739 9.4529 9.38739 9.125V4.375C9.38739 4.0471 9.65561 3.78125 9.98649 3.78125Z" fill="currentColor" />
+                            <circle cx="15.3784" cy="19" r="2.5" fill="currentColor" />
+                            <path d="M15.3784 11.5V16.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
                           </g>
                         </svg>
                         插入父节点
@@ -861,7 +979,7 @@ function App() {
                     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M10 2H4a1 1 0 00-1 1v9h1V3h6V2zm2 2H6a1 1 0 00-1 1v9a1 1 0 001 1h6a1 1 0 001-1V5a1 1 0 00-1-1zm0 10H6V5h6v9z"/>
+                          <path d="M10 2H4a1 1 0 00-1 1v9h1V3h6V2zm2 2H6a1 1 0 00-1 1v9a1 1 0 001 1h6a1 1 0 001-1V5a1 1 0 00-1-1zm0 10H6V5h6v9z" />
                         </svg>
                         复制
                       </span>
@@ -877,10 +995,11 @@ function App() {
                     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M10 2H6v1h4V2zm2 1v1h1v10H3V4h1V3H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V4a1 1 0 00-1-1h-1zM6 3a1 1 0 011-1h2a1 1 0 011 1v1H6V3z"/>
+                          <path d="M10 2H6v1h4V2zm2 1v1h1v10H3V4h1V3H3a1 1 0 00-1 1v10a1 1 0 001 1h10a1 1 0 001-1V4a1 1 0 00-1-1h-1zM6 3a1 1 0 011-1h2a1 1 0 011 1v1H6V3z" />
                         </svg>
                         粘贴
                       </span>
+                      
                       <span style={{ fontSize: '12px', color: '#999', marginLeft: '24px' }}>⌘V</span>
                     </span>
                   </Menu.Item>
@@ -894,7 +1013,7 @@ function App() {
                     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: isRootNode ? '#999' : '#ff4d4f' }}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M6 2v1H3v1h10V3h-3V2H6zm-1 3v8h6V5H5zm2 1h1v6H7V6zm2 0h1v6H9V6z"/>
+                          <path d="M6 2v1H3v1h10V3h-3V2H6zm-1 3v8h6V5H5zm2 1h1v6H7V6zm2 0h1v6H9V6z" />
                         </svg>
                         删除
                       </span>
@@ -909,7 +1028,7 @@ function App() {
                     <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M8 2a6 6 0 100 12A6 6 0 008 2zm0 1a5 5 0 110 10A5 5 0 018 3zm0 2a3 3 0 100 6 3 3 0 000-6zm0 1a2 2 0 110 4 2 2 0 010-4z"/>
+                          <path d="M8 2a6 6 0 100 12A6 6 0 008 2zm0 1a5 5 0 110 10A5 5 0 018 3zm0 2a3 3 0 100 6 3 3 0 000-6zm0 1a2 2 0 110 4 2 2 0 010-4z" />
                         </svg>
                         回到根节点
                       </span>
@@ -921,22 +1040,22 @@ function App() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                           <g>
-                            <rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor"/>
-                            <path d="M12 6V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="12" cy="9" r="1.5" fill="currentColor"/>
-                            <path d="M12 9L7 12M12 9L17 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <rect x="4" y="12" width="6" height="4" rx="1" fill="currentColor"/>
-                            <rect x="14" y="12" width="6" height="4" rx="1" fill="currentColor"/>
-                            <path d="M7 16V18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="7" cy="18" r="1.5" fill="currentColor"/>
-                            <path d="M7 18L5 20M7 18L9 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="5" cy="20" r="1" fill="currentColor"/>
-                            <circle cx="9" cy="20" r="1" fill="currentColor"/>
-                            <path d="M17 16V18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="17" cy="18" r="1.5" fill="currentColor"/>
-                            <path d="M17 18L15 20M17 18L19 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="15" cy="20" r="1" fill="currentColor"/>
-                            <circle cx="19" cy="20" r="1" fill="currentColor"/>
+                            <rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor" />
+                            <path d="M12 6V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="12" cy="9" r="1.5" fill="currentColor" />
+                            <path d="M12 9L7 12M12 9L17 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <rect x="4" y="12" width="6" height="4" rx="1" fill="currentColor" />
+                            <rect x="14" y="12" width="6" height="4" rx="1" fill="currentColor" />
+                            <path d="M7 16V18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="7" cy="18" r="1.5" fill="currentColor" />
+                            <path d="M7 18L5 20M7 18L9 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="5" cy="20" r="1" fill="currentColor" />
+                            <circle cx="9" cy="20" r="1" fill="currentColor" />
+                            <path d="M17 16V18" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="17" cy="18" r="1.5" fill="currentColor" />
+                            <path d="M17 18L15 20M17 18L19 20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="15" cy="20" r="1" fill="currentColor" />
+                            <circle cx="19" cy="20" r="1" fill="currentColor" />
                           </g>
                         </svg>
                         展开所有
@@ -949,16 +1068,16 @@ function App() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
                           <g>
-                            <rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor"/>
-                            <path d="M12 6V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <circle cx="12" cy="9" r="1.5" fill="currentColor"/>
-                            <path d="M12 9L7 12M12 9L17 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                            <rect x="4" y="12" width="6" height="4" rx="1" fill="currentColor"/>
-                            <path d="M7 13.5V14.5M6.5 14H7.5" stroke="white" strokeWidth="1" strokeLinecap="round"/>
-                            <rect x="14" y="12" width="6" height="4" rx="1" fill="currentColor"/>
-                            <path d="M17 13.5V14.5M16.5 14H17.5" stroke="white" strokeWidth="1" strokeLinecap="round"/>
-                            <path d="M7 17L7 19M6 18L7 19L8 18" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M17 17L17 19M16 18L17 19L18 18" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+                            <rect x="9" y="2" width="6" height="4" rx="1" fill="currentColor" />
+                            <path d="M12 6V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <circle cx="12" cy="9" r="1.5" fill="currentColor" />
+                            <path d="M12 9L7 12M12 9L17 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                            <rect x="4" y="12" width="6" height="4" rx="1" fill="currentColor" />
+                            <path d="M7 13.5V14.5M6.5 14H7.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
+                            <rect x="14" y="12" width="6" height="4" rx="1" fill="currentColor" />
+                            <path d="M17 13.5V14.5M16.5 14H17.5" stroke="white" strokeWidth="1" strokeLinecap="round" />
+                            <path d="M7 17L7 19M6 18L7 19L8 18" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+                            <path d="M17 17L17 19M16 18L17 19L18 18" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
                           </g>
                         </svg>
                         折叠所有
@@ -972,25 +1091,25 @@ function App() {
           </div>
         )}
 
-      {/* 节点格式化工具栏 */}
-      <NodeFormatToolbar
-        visible={hasSelectedNode}
-        nodeId={activeNodeId}
-        currentStyle={nodeStyle}
-        onStyleChange={handleNodeStyleChange}
-        onInsertTable={handleInsertTable}
-        onInsertCodeBlock={handleInsertCodeBlock}
-        onClose={() => {}}
-      />
-
-      {/* 图标选择器 */}
-      {iconSelectorVisible && (
-        <IconSelector
-          onSelect={handleIconSelect}
-          onClose={() => setIconSelectorVisible(false)}
-          initialIcons={mindMapRef.current?.getSelectedNode()?.config?.icons || {}}
+        {/* 节点格式化工具栏 */}
+        <NodeFormatToolbar
+          visible={hasSelectedNode}
+          nodeId={activeNodeId}
+          currentStyle={nodeStyle}
+          onStyleChange={handleNodeStyleChange}
+          onInsertTable={handleInsertTable}
+          onInsertCodeBlock={handleInsertCodeBlock}
+          onClose={() => { }}
         />
-      )}
+
+        {/* 图标选择器 */}
+        {iconSelectorVisible && (
+          <IconSelector
+            onSelect={handleIconSelect}
+            onClose={() => setIconSelectorVisible(false)}
+            initialIcons={mindMapRef.current?.getNodeManager().findNode(activeNodeId!)?.config?.icons || {}}
+          />
+        )}
 
       </div>
     </div>
