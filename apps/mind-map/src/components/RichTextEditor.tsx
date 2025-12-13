@@ -9,10 +9,29 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
+import { TextSelection } from '@tiptap/pm/state';
 import { common, createLowlight } from 'lowlight';
 import './RichTextEditor.css';
 
 const lowlight = createLowlight(common);
+
+// 自定义 TableCell 扩展，支持单击直接编辑
+const CustomTableCell = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+    };
+  },
+});
+
+// 自定义 TableHeader 扩展，支持单击直接编辑
+const CustomTableHeader = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+    };
+  },
+});
 
 interface RichTextEditorProps {
   /** 初始内容（HTML 或纯文本） */
@@ -31,7 +50,6 @@ interface RichTextEditorProps {
 
 /**
  * 富文本编辑器组件
- * 使用 Tiptap 实现，支持表格、代码块、文字样式等功能
  */
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({
   initialContent = '',
@@ -53,16 +71,40 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       Color,
       Table.configure({
         resizable: true,
+        // 禁用单元格选择，这样点击就直接进入编辑
+        allowTableNodeSelection: false,
       }),
       TableRow,
-      TableHeader,
-      TableCell,
+      CustomTableHeader,
+      CustomTableCell,
       CodeBlockLowlight.configure({
         lowlight,
       }),
     ],
     content: initialContent,
     autofocus: 'end',
+    // 设置编辑器属性，使表格单元格可以直接编辑
+    editorProps: {
+      handleClick: (view, _pos, event) => {
+        const target = event.target as HTMLElement;
+        // 检查是否点击了表格单元格
+        const cell = target.closest('td, th');
+        if (cell) {
+          // 获取点击位置对应的文档位置
+          const clickPos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          if (clickPos) {
+            // 将光标设置到点击位置
+            const tr = view.state.tr.setSelection(
+              TextSelection.near(view.state.doc.resolve(clickPos.pos))
+            );
+            view.dispatch(tr);
+            view.focus();
+            return true;
+          }
+        }
+        return false;
+      },
+    },
   });
 
   // 保存内容

@@ -182,23 +182,26 @@
   padding: 8px;
   text-align: left;
   min-width: 60px;
+  position: relative;
+  background: transparent;
+  font-weight: normal;
 }
 
 .editor-content .tiptap th {
-  background: #f5f5f5;
-  font-weight: 600;
+  background: transparent;
+  font-weight: normal;
 }
 
 .editor-content .tiptap .selectedCell::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: rgba(74, 158, 255, 0.2);
-  pointer-events: none;
-  z-index: 2;
+  display: none;
+}
+
+.editor-content .tiptap th:focus,
+.editor-content .tiptap td:focus,
+.editor-content .tiptap th:focus-within,
+.editor-content .tiptap td:focus-within {
+  outline: none;
+  border-color: #ddd;
 }
 
 /* 行内代码样式 */

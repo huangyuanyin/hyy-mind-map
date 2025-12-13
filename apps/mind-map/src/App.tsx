@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { MindMap } from 'simple-mind-map';
-import type { NodeData } from 'simple-mind-map';
+import { MindMap } from 'hyy-mind-map';
+import type { NodeData } from 'hyy-mind-map';
 import { Menu } from '@arco-design/web-react';
 import '@arco-design/web-react/dist/css/arco.css';
 import { IconSelector } from './components/IconSelector';

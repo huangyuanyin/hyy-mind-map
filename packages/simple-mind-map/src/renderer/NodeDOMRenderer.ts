@@ -51,6 +51,8 @@ export class NodeDOMRenderer {
   private editingNodeId: string | null = null;
   // 当前编辑中的单元格（表格/代码块）
   private editingCellNodeId: string | null = null;
+  // 上次点击的节点 ID
+  private lastClickedNodeId: string | null = null;
   // 编辑完成回调
   private onEditComplete: EditCompleteCallback | null = null;
   // 节点点击回调
@@ -285,6 +287,11 @@ export class NodeDOMRenderer {
       
       const nodeId = element.dataset.nodeId;
       if (nodeId) {
+        // 如果点击了不同的节点，清除上次点击记录
+        if (this.lastClickedNodeId !== nodeId) {
+          this.lastClickedNodeId = nodeId;
+        }
+        
         // 在 mousedown 时保存节点的选中状态，用于后续 click 判断是否进入编辑模式
         const cachedNode = this.nodeDataCache.get(nodeId);
         const wasSelected = cachedNode && (cachedNode.isSelected || cachedNode.isActive);
@@ -364,18 +371,21 @@ export class NodeDOMRenderer {
     // 始终更新节点数据缓存，确保事件处理器能访问到最新的节点状态
     this.nodeDataCache.set(node.id, node);
 
-    // 更新位置和尺寸
-    element.style.left = `${node.x}px`;
-    element.style.top = `${node.y}px`;
-    element.style.width = `${node.width}px`;
-    element.style.height = `${node.height}px`;
-
-    // 如果节点正在编辑（包括表格/代码块单元格），不更新内容
-    const isEditing = this.editingNodeId === node.id || this.editingCellNodeId === node.id;
-    
     // 检查是否有附加内容（表格或代码块）
     const attachment = node.config?.attachment;
     const hasAttachment = attachment?.type === 'table' || attachment?.type === 'code';
+
+    // 更新位置和尺寸
+    element.style.left = `${node.x}px`;
+    element.style.top = `${node.y}px`;
+    element.style.width = hasAttachment ? 'auto' : `${node.width}px`;
+    // 表格/代码块节点使用自动高度以适应内容换行
+    element.style.height = hasAttachment ? 'auto' : `${node.height}px`;
+    element.style.minWidth = hasAttachment ? `${node.width}px` : '';
+    element.style.minHeight = hasAttachment ? `${node.height}px` : '';
+
+    // 如果节点正在编辑（包括表格/代码块单元格），不更新内容
+    const isEditing = this.editingNodeId === node.id || this.editingCellNodeId === node.id;
     
     // 对于表格/代码块节点，不使用节点 padding（表格自己有 margin）
     element.style.padding = hasAttachment ? '0' : `${this.theme.padding}px`;
@@ -528,17 +538,21 @@ export class NodeDOMRenderer {
     if (node.isSelected || node.isActive) {
       element.style.border = `2px solid ${this.theme.nodeSelectedBorderColor}`;
       element.style.boxShadow = `0 0 0 2px ${this.theme.nodeSelectedBorderColor}20`;
+      element.dataset.selected = 'true';
     } else if (node.isHover) {
       element.style.border = `2px solid ${customBorderColor || this.theme.nodeBorderColor}`;
       element.style.boxShadow = 'none';
+      element.dataset.selected = 'false';
     } else if (customBorderColor) {
       // 有自定义边框色时显示边框
       element.style.border = `2px solid ${customBorderColor}`;
       element.style.boxShadow = 'none';
+      element.dataset.selected = 'false';
     } else {
       // 默认状态：透明边框，保持布局稳定
       element.style.border = '2px solid transparent';
       element.style.boxShadow = 'none';
+      element.dataset.selected = 'false';
     }
   }
 
@@ -847,16 +861,12 @@ export class NodeDOMRenderer {
     table.rows.forEach((row, rowIndex) => {
       html += '<tr>';
       row.forEach((cell, colIndex) => {
-        const isHeader = cell.isHeader || rowIndex === 0;
-        const bgColor = isHeader ? '#fafafa' : '#fff';
-        const fontWeight = isHeader ? '500' : 'normal';
-        const color = isHeader ? '#333' : '#666';
         html += `<td 
           class="editable-cell" 
           data-row="${rowIndex}" 
           data-col="${colIndex}"
           data-node-id="${nodeId}"
-          style="border: 1px solid #e8e8e8; padding: 8px 12px; background: ${bgColor}; font-weight: ${fontWeight}; color: ${color}; min-width: 60px; cursor: text; outline: none; transition: background 0.15s;"
+          style="border: 1px solid #e8e8e8; padding: 8px 12px; background: #fff; font-weight: normal; color: #666; min-width: 60px; max-width: 310px; word-wrap: break-word; word-break: break-all; white-space: normal; cursor: text; outline: none;"
         >${this.escapeHtml(cell.content) || '&nbsp;'}</td>`;
       });
       html += '</tr>';
@@ -871,36 +881,68 @@ export class NodeDOMRenderer {
    */
   private bindTableCellEvents(element: HTMLElement, nodeId: string): void {
     const cells = element.querySelectorAll('.editable-cell');
+    
     cells.forEach((cell) => {
       const cellEl = cell as HTMLElement;
       
-      // 阻止事件冒泡到节点
+      // 标记是否在本次 mousedown 中设置了 lastClickedNodeId
+      let justSetLastClickedNodeId = false;
+      
+      // 检查是否允许进入编辑模式（需要先点击选中节点）
+      const canEnterEditMode = (): boolean => {
+        // 如果是刚刚在本次 mousedown 中设置的，不允许进入编辑模式
+        if (justSetLastClickedNodeId) return false;
+        // 如果上次点击的是同一个节点，则允许进入编辑模式
+        return this.lastClickedNodeId === nodeId;
+      };
+      
+      // mousedown 事件
       cellEl.addEventListener('mousedown', (e) => {
+        justSetLastClickedNodeId = false;
+        
+        if (cellEl.contentEditable === 'true') {
+          e.stopPropagation();
+          return;
+        }
+        
+        // 检查是否允许进入编辑模式
+        if (this.lastClickedNodeId !== nodeId) {
+          // 第一次点击，记录节点 ID，让事件冒泡去选中节点
+          this.lastClickedNodeId = nodeId;
+          justSetLastClickedNodeId = true;
+          return;
+        }
+        
+        // 允许进入编辑模式，阻止冒泡
         e.stopPropagation();
+        this.editingCellNodeId = nodeId;
+        cellEl.contentEditable = 'true';
+        cellEl.focus();
       });
       
-      // 单击开始编辑（节点已经被选中的情况下）
+      // 单击定位光标到点击位置
       cellEl.addEventListener('click', (e) => {
+        if (!canEnterEditMode()) {
+          return;
+        }
+        
         e.stopPropagation();
         e.preventDefault();
         
-        // 标记正在编辑
-        this.editingCellNodeId = nodeId;
+        // 确保已经进入编辑模式
+        if (cellEl.contentEditable !== 'true') {
+          this.editingCellNodeId = nodeId;
+          cellEl.contentEditable = 'true';
+          cellEl.focus();
+        }
         
-        // 进入编辑模式
-        cellEl.contentEditable = 'true';
-        cellEl.style.background = '#fff';
-        cellEl.style.boxShadow = 'inset 0 0 0 1px #1890ff';
-        cellEl.focus();
+        // 将光标定位到点击位置
+        this.setCaretAtPoint(e.clientX, e.clientY);
       });
 
       // 失去焦点保存
       cellEl.addEventListener('blur', () => {
-        const rowIndex = parseInt(cellEl.dataset.row || '0', 10);
-        const isHeader = rowIndex === 0;
         cellEl.contentEditable = 'false';
-        cellEl.style.background = isHeader ? '#fafafa' : '#fff';
-        cellEl.style.boxShadow = 'none';
         
         // 清除编辑标记
         this.editingCellNodeId = null;
