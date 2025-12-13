@@ -520,6 +520,8 @@ function App() {
 
     const node = mindMapRef.current.getNodeManager().findNode(nodeId);
     if (node) {
+      mindMapRef.current.saveHistory('updateNodeStyle', '修改节点样式');
+
       if (!node.config) {
         node.config = {};
       }
@@ -536,6 +538,8 @@ function App() {
 
     const node = mindMapRef.current.getNodeManager().findNode(nodeId);
     if (node) {
+      mindMapRef.current.saveHistory('insertTable', '插入表格');
+
       if (!node.config) {
         node.config = {};
       }
@@ -570,6 +574,8 @@ function App() {
       return;
     }
 
+    mindMapRef.current.saveHistory('insertCodeBlock', '插入代码块');
+
     if (!node.config) {
       node.config = {};
     }
@@ -593,6 +599,8 @@ function App() {
     // 更新节点配置
     const node = mindMapRef.current.getNodeManager().findNode(activeNodeId);
     if (node) {
+      mindMapRef.current.saveHistory('updateNodeIcons', '修改节点图标');
+
       if (!node.config) {
         node.config = {};
       }

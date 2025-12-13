@@ -311,6 +311,7 @@ export class MindMap {
     this.nodeDOMRenderer.setTableUpdateCallback((nodeId, table) => {
       const node = this.nodeManager.findNode(nodeId);
       if (node?.config?.attachment) {
+        this.saveHistory('updateTable', '更新表格');
         node.config.attachment.table = table;
         this.relayout();
       }
@@ -320,6 +321,7 @@ export class MindMap {
     this.nodeDOMRenderer.setCodeBlockUpdateCallback((nodeId, codeBlock) => {
       const node = this.nodeManager.findNode(nodeId);
       if (node?.config?.attachment) {
+        this.saveHistory('updateCodeBlock', '更新代码块');
         node.config.attachment.codeBlock = codeBlock;
         this.relayout();
       }
@@ -327,6 +329,7 @@ export class MindMap {
 
     // 清除附件回调
     this.nodeDOMRenderer.setClearAttachmentCallback((nodeId) => {
+      this.saveHistory('clearAttachment', '清除附件');
       this.clearNodeAttachment(nodeId);
     });
   }
@@ -583,6 +586,26 @@ export class MindMap {
    */
   canRedo(): boolean {
     return this.historyManager.canRedo();
+  }
+
+  /**
+   * 保存历史记录（用于外部操作需要支持撤销/重做时调用）
+   * @param operationType 操作类型
+   * @param description 操作描述
+   */
+  saveHistory(operationType: string, description: string): void {
+    const root = this.nodeManager.getRoot();
+    if (root) {
+      const currentData = root.toData();
+      this.historyManager.saveState(operationType, description, currentData);
+    }
+  }
+
+  /**
+   * 监听历史变化
+   */
+  onHistoryChange(callback: () => void): () => void {
+    return this.historyManager.onChange(callback);
   }
 
   // ==================== 工具方法 ====================
