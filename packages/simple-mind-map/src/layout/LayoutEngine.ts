@@ -83,9 +83,22 @@ export class LayoutEngine {
     } else {
       // 普通文本节点
       const fontSize = node.config?.fontSize;
-      const size = this.renderer.measureText(node.text, icons, fontSize);
-      node.width = Math.max(size.width, LAYOUT.MIN_NODE_WIDTH);
-      node.height = size.height;
+      const textToMeasure = node.richContent?.text || node.text;
+      const size = this.renderer.measureText(textToMeasure, icons, fontSize);
+      
+      // 限制最大宽度，超过则换行
+      if (size.width > LAYOUT.MAX_NODE_WIDTH) {
+        node.width = LAYOUT.MAX_NODE_WIDTH;
+        // 计算换行后的行数和高度
+        const lineCount = Math.ceil(size.width / (LAYOUT.MAX_NODE_WIDTH - 20)); // 减去 padding
+        const actualFontSize = fontSize || 14;
+        const lineHeight = actualFontSize * 1.5;
+        const padding = 10;
+        node.height = lineCount * lineHeight + padding * 2;
+      } else {
+        node.width = Math.max(size.width, LAYOUT.MIN_NODE_WIDTH);
+        node.height = size.height;
+      }
     }
   }
 

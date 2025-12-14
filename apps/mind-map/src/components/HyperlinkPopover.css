@@ -1,0 +1,121 @@
+.hyperlink-popover {
+  position: fixed;
+  z-index: 1003;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  min-width: 320px;
+  animation: hyperlinkPopoverIn 0.2s ease-out;
+  overflow: hidden;
+}
+
+@keyframes hyperlinkPopoverIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hyperlink-popover-header {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.hyperlink-popover-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.hyperlink-popover-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.hyperlink-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hyperlink-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hyperlink-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 14px;
+  border: 1.5px solid #e0e0e0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  transition: all 0.15s ease;
+  outline: none;
+}
+
+.hyperlink-input:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
+}
+
+.hyperlink-input::placeholder {
+  color: #999;
+}
+
+.hyperlink-input-group.has-error .hyperlink-input,
+.hyperlink-input-row.has-error .hyperlink-input {
+  border-color: #ff4d4f;
+}
+
+.hyperlink-input-group.has-error .hyperlink-input:focus,
+.hyperlink-input-row.has-error .hyperlink-input:focus {
+  box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.1);
+}
+
+.hyperlink-error {
+  font-size: 12px;
+  color: #ff4d4f;
+  margin-top: 2px;
+}
+
+.hyperlink-confirm-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: #1890ff;
+  border-radius: 8px;
+  cursor: pointer;
+  color: #fff;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.hyperlink-confirm-btn:hover {
+  background: #40a9ff;
+}
+
+.hyperlink-confirm-btn:active {
+  background: #096dd9;
+}
+
+/* 响应式 */
+@media (max-width: 480px) {
+  .hyperlink-popover {
+    min-width: 280px;
+    max-width: calc(100vw - 32px);
+  }
+}
+

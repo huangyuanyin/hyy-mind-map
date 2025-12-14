@@ -11,6 +11,7 @@
     "@arco-design/web-react": "^2.66.8",
     "@tiptap/extension-code-block-lowlight": "^3.13.0",
     "@tiptap/extension-color": "^3.13.0",
+    "@tiptap/extension-link": "^3.13.0",
     "@tiptap/extension-table": "^3.13.0",
     "@tiptap/extension-table-cell": "^3.13.0",
     "@tiptap/extension-table-header": "^3.13.0",
@@ -20,10 +21,10 @@
     "@tiptap/pm": "^3.13.0",
     "@tiptap/react": "^3.13.0",
     "@tiptap/starter-kit": "^3.13.0",
+    "hyy-mind-map": "workspace:*",
     "lowlight": "^3.3.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "hyy-mind-map": "workspace:*"
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@rsbuild/core": "^1.1.10",

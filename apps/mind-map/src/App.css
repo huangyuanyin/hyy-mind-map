@@ -34,3 +34,18 @@ button:focus-visible {
 .description {
   color: #888;
 }
+
+.node-content a {
+  color: #1890ff;
+  text-decoration: underline;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.node-content a:hover {
+  color: #40a9ff;
+}
+
+.node-content a:active {
+  color: #096dd9;
+}

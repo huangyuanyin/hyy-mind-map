@@ -18,6 +18,7 @@ interface NodeFormatToolbarProps {
   onStyleChange: (nodeId: string, style: NodeStyle) => void;
   onInsertTable: (nodeId: string) => void;
   onInsertCodeBlock: (nodeId: string) => void;
+  onInsertHyperlink: (nodeId: string, selectedText: string, selectionRange: Range | null) => void;
   onClose: () => void;
 }
 
@@ -56,7 +57,7 @@ export const NodeFormatToolbar: React.FC<NodeFormatToolbarProps> = ({
   onStyleChange,
   onInsertTable,
   onInsertCodeBlock,
-  onClose,
+  onInsertHyperlink,
 }) => {
   const [showBgPanel, setShowBgPanel] = useState(false);
   const [showTextPanel, setShowTextPanel] = useState(false);
@@ -268,6 +269,33 @@ export const NodeFormatToolbar: React.FC<NodeFormatToolbarProps> = ({
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
           <polyline points="16 18 22 12 16 6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
           <polyline points="8 6 2 12 8 18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+
+      <div className="toolbar-divider" />
+
+      {/* 超链接 */}
+      <button 
+        className="toolbar-btn"
+        title="插入超链接"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          // 在 mousedown 时获取选区（此时选区还存在）
+          const selection = window.getSelection();
+          const selectedText = selection && selection.toString().trim().length > 0 
+            ? selection.toString().trim() 
+            : '';
+          // 保存选区的 Range，用于后续替换
+          let selectionRange: Range | null = null;
+          if (selection && selection.rangeCount > 0 && selectedText) {
+            selectionRange = selection.getRangeAt(0).cloneRange();
+          }
+          onInsertHyperlink(nodeId, selectedText, selectionRange);
+        }}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
     </div>

@@ -1,6 +1,7 @@
 import type { HyyMindMapNode } from '../core/HyyMindMapNode';
 import type { Theme, ViewState, RichContent, TableData, CodeBlockData } from '../types';
 import { DEFAULT_THEME } from '../constants/theme';
+import { LAYOUT } from '../constants';
 
 /**
  * 编辑完成回调
@@ -256,7 +257,7 @@ export class NodeDOMRenderer {
       color: ${this.theme.nodeTextColor};
       display: flex;
       align-items: center;
-      justify-content: center;
+      justify-content: flex-start;
       padding: ${this.theme.padding}px;
       transition: box-shadow 0.2s, border-color 0.2s;
     `;
@@ -265,7 +266,7 @@ export class NodeDOMRenderer {
     const contentContainer = document.createElement('div');
     contentContainer.className = 'node-content';
     contentContainer.style.cssText = `
-      text-align: center;
+      text-align: left;
       white-space: nowrap;
       overflow: visible;
     `;
@@ -379,10 +380,11 @@ export class NodeDOMRenderer {
     element.style.left = `${node.x}px`;
     element.style.top = `${node.y}px`;
     element.style.width = hasAttachment ? 'auto' : `${node.width}px`;
-    // 表格/代码块节点使用自动高度以适应内容换行
-    element.style.height = hasAttachment ? 'auto' : `${node.height}px`;
+    // 表格/代码块节点和需要换行的普通文本节点使用自动高度
+    const needsAutoHeight = hasAttachment || node.width >= LAYOUT.MAX_NODE_WIDTH;
+    element.style.height = needsAutoHeight ? 'auto' : `${node.height}px`;
     element.style.minWidth = hasAttachment ? `${node.width}px` : '';
-    element.style.minHeight = hasAttachment ? `${node.height}px` : '';
+    element.style.minHeight = (hasAttachment || needsAutoHeight) ? `${node.height}px` : '';
 
     // 如果节点正在编辑（包括表格/代码块单元格），不更新内容
     const isEditing = this.editingNodeId === node.id || this.editingCellNodeId === node.id;
@@ -394,6 +396,16 @@ export class NodeDOMRenderer {
     if (!isEditing) {
       const contentContainer = element.querySelector('.node-content') as HTMLElement;
       if (contentContainer) {
+        // 根据节点宽度决定是否允许换行
+        const needsWrap = node.width >= LAYOUT.MAX_NODE_WIDTH;
+        contentContainer.style.maxWidth = needsWrap ? `${LAYOUT.MAX_NODE_WIDTH - this.theme.padding * 2}px` : 'none';
+        contentContainer.style.whiteSpace = needsWrap ? 'normal' : 'nowrap';
+        contentContainer.style.wordWrap = needsWrap ? 'break-word' : 'normal';
+        contentContainer.style.wordBreak = needsWrap ? 'break-all' : 'normal';
+        // 始终居左对齐
+        contentContainer.style.textAlign = 'left';
+        element.style.justifyContent = 'flex-start';
+        
         console.log('[NodeDOMRenderer] updateNodeElement for node:', node.id, 'will modify innerHTML');
         // 渲染图标（图标在所有情况下都需要渲染）
         // 图标尺寸与 constants/index.ts 中的 ICON 常量保持一致

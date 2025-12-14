@@ -8,6 +8,8 @@ export const LAYOUT = {
   HORIZONTAL_GAP: 100,
   /** 节点最小宽度 */
   MIN_NODE_WIDTH: 120,
+  /** 节点最大宽度（超过则换行） */
+  MAX_NODE_WIDTH: 420,
   /** 节点最小高度 */
   MIN_NODE_HEIGHT: 41,
 } as const;

@@ -5,6 +5,8 @@ import { Menu } from '@arco-design/web-react';
 import '@arco-design/web-react/dist/css/arco.css';
 import { IconSelector } from './components/IconSelector';
 import { NodeFormatToolbar } from './components/NodeFormatToolbar';
+import { HyperlinkPopover } from './components/HyperlinkPopover';
+import { HyperlinkPreview } from './components/HyperlinkPreview';
 import './App.css';
 
 function App() {
@@ -21,6 +23,25 @@ function App() {
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
   // 图标选择器状态
   const [iconSelectorVisible, setIconSelectorVisible] = useState<boolean>(false);
+  // 超链接悬浮框状态
+  const [hyperlinkPopoverVisible, setHyperlinkPopoverVisible] = useState<boolean>(false);
+  const [hyperlinkPopoverMode, setHyperlinkPopoverMode] = useState<'insert' | 'edit'>('insert');
+  const [hyperlinkHasSelectedText, setHyperlinkHasSelectedText] = useState<boolean>(false);
+  const [hyperlinkSelectedText, setHyperlinkSelectedText] = useState<string>('');
+  const [hyperlinkInitialText, setHyperlinkInitialText] = useState<string>('');
+  const [hyperlinkInitialUrl, setHyperlinkInitialUrl] = useState<string>('');
+  const [hyperlinkPopoverPosition, setHyperlinkPopoverPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  // 超链接预览状态
+  const [hyperlinkPreviewVisible, setHyperlinkPreviewVisible] = useState<boolean>(false);
+  const [hyperlinkPreviewUrl, setHyperlinkPreviewUrl] = useState<string>('');
+  const [hyperlinkPreviewText, setHyperlinkPreviewText] = useState<string>('');
+  const [hyperlinkPreviewPosition, setHyperlinkPreviewPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [hyperlinkPreviewNodeId, setHyperlinkPreviewNodeId] = useState<string | null>(null);
+  const [hyperlinkPreviewElement, setHyperlinkPreviewElement] = useState<HTMLAnchorElement | null>(null);
+  const hyperlinkHoverTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const isHoveringPreviewRef = useRef<boolean>(false);
+  // 保存选区 Range 用于替换选中文本为超链接
+  const hyperlinkSelectionRangeRef = useRef<Range | null>(null);
   // 节点格式化工具栏状态
   const [nodeStyle, setNodeStyle] = useState<{
     backgroundColor?: string;
@@ -228,6 +249,70 @@ function App() {
       unsubscribeSelectionSave();
       window.removeEventListener('keydown', debugKeyHandler);
       mindMap.destroy();
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleLinkMouseEnter = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // 检查是否是节点内的超链接
+      if (target.tagName === 'A' && target.closest('.node-content')) {
+        const linkElement = target as HTMLAnchorElement;
+        const href = linkElement.getAttribute('href') || '';
+        const text = linkElement.textContent || '';
+        
+        // 获取所属节点的 ID
+        const nodeElement = linkElement.closest('[data-node-id]');
+        const nodeId = nodeElement?.getAttribute('data-node-id') || null;
+
+        // 清除之前的定时器
+        if (hyperlinkHoverTimerRef.current) {
+          clearTimeout(hyperlinkHoverTimerRef.current);
+        }
+
+        // 延迟显示预览框
+        hyperlinkHoverTimerRef.current = setTimeout(() => {
+          const rect = linkElement.getBoundingClientRect();
+          setHyperlinkPreviewPosition({
+            x: rect.left,
+            y: rect.bottom + 6,
+          });
+          setHyperlinkPreviewUrl(href);
+          setHyperlinkPreviewText(text);
+          setHyperlinkPreviewNodeId(nodeId);
+          setHyperlinkPreviewElement(linkElement);
+          setHyperlinkPreviewVisible(true);
+        }, 300);
+      }
+    };
+
+    const handleLinkMouseLeave = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'A' && target.closest('.node-content')) {
+        // 清除定时器
+        if (hyperlinkHoverTimerRef.current) {
+          clearTimeout(hyperlinkHoverTimerRef.current);
+          hyperlinkHoverTimerRef.current = null;
+        }
+
+        // 延迟关闭预览框（允许鼠标移动到预览框）
+        setTimeout(() => {
+          if (!isHoveringPreviewRef.current) {
+            setHyperlinkPreviewVisible(false);
+          }
+        }, 100);
+      }
+    };
+
+    document.addEventListener('mouseenter', handleLinkMouseEnter, true);
+    document.addEventListener('mouseleave', handleLinkMouseLeave, true);
+
+    return () => {
+      document.removeEventListener('mouseenter', handleLinkMouseEnter, true);
+      document.removeEventListener('mouseleave', handleLinkMouseLeave, true);
+      if (hyperlinkHoverTimerRef.current) {
+        clearTimeout(hyperlinkHoverTimerRef.current);
+      }
     };
   }, []);
 
@@ -588,6 +673,329 @@ function App() {
         language: 'javascript'
       }
     };
+
+    mindMapRef.current.relayout();
+  };
+
+  // 处理插入超链接 - 打开悬浮框
+  const handleInsertHyperlink = (nodeId: string, selectedText: string, selectionRange: Range | null) => {
+    if (!mindMapRef.current) return;
+
+    const node = mindMapRef.current.getNodeManager().findNode(nodeId);
+    if (!node) return;
+
+    // 使用传入的选中文本（在 mousedown 时已经获取）
+    const hasSelection = selectedText.length > 0;
+
+    // 保存选区 Range 用于后续替换
+    hyperlinkSelectionRangeRef.current = selectionRange;
+
+    // 获取节点元素的位置，将悬浮框显示在节点下方
+    const nodeElement = document.querySelector(`[data-node-id="${nodeId}"]`);
+    if (nodeElement) {
+      const rect = nodeElement.getBoundingClientRect();
+      setHyperlinkPopoverPosition({
+        x: rect.left + rect.width / 2 - 160, // 居中显示（悬浮框宽度约 320px）
+        y: rect.bottom + 10,
+      });
+    } else {
+      // 默认位置在屏幕中央
+      setHyperlinkPopoverPosition({
+        x: window.innerWidth / 2 - 160,
+        y: window.innerHeight / 2 - 100,
+      });
+    }
+
+    setHyperlinkPopoverMode('insert');
+    setHyperlinkHasSelectedText(hasSelection);
+    setHyperlinkSelectedText(selectedText);
+    setHyperlinkInitialUrl('');
+    setHyperlinkPopoverVisible(true);
+
+    // 使用 CSS 高亮选中的文本（因为原生选区会在输入框获取焦点时丢失）
+    if (selectionRange && hasSelection) {
+      requestAnimationFrame(() => {
+        try {
+          const highlightSpan = document.createElement('span');
+          highlightSpan.className = 'hyperlink-selection-highlight';
+          highlightSpan.style.cssText = 'background-color: #b4d7ff; border-radius: 2px;';
+          
+          // 用 span 包裹选中的内容
+          selectionRange.surroundContents(highlightSpan);
+        } catch (e) {
+          // 如果 surroundContents 失败（例如跨节点选择），忽略
+          console.log('无法高亮选中文本:', e);
+        }
+      });
+    }
+  };
+
+  // 处理编辑超链接 - 从预览框打开编辑框
+  const handleEditHyperlink = () => {
+    // 关闭预览框
+    setHyperlinkPreviewVisible(false);
+
+    // 设置编辑模式的数据
+    setHyperlinkPopoverMode('edit');
+    setHyperlinkHasSelectedText(false); // 编辑模式下不需要这个
+    setHyperlinkSelectedText('');
+    setHyperlinkInitialText(hyperlinkPreviewText); // 设置初始文本
+    setHyperlinkInitialUrl(hyperlinkPreviewUrl);
+
+    // 设置位置（在预览框位置附近）
+    setHyperlinkPopoverPosition({
+      x: hyperlinkPreviewPosition.x,
+      y: hyperlinkPreviewPosition.y,
+    });
+
+    setHyperlinkPopoverVisible(true);
+  };
+
+  // 删除超链接
+  const handleDeleteHyperlink = () => {
+    if (!mindMapRef.current || !hyperlinkPreviewNodeId || !hyperlinkPreviewElement) return;
+
+    const node = mindMapRef.current.getNodeManager().findNode(hyperlinkPreviewNodeId);
+    if (!node) return;
+
+    mindMapRef.current.saveHistory('deleteHyperlink', '删除超链接');
+
+    // 获取当前节点的 HTML 内容
+    const currentHtml = node.richContent?.html || '';
+    
+    // 获取链接元素的 outerHTML 和纯文本
+    const linkOuterHtml = hyperlinkPreviewElement.outerHTML;
+    const linkText = hyperlinkPreviewElement.textContent || '';
+
+    // 用纯文本替换链接 HTML
+    const newHtml = currentHtml.replace(linkOuterHtml, linkText);
+
+    if (!node.richContent) {
+      node.richContent = { html: '', text: '', json: {} };
+    }
+    node.richContent.html = newHtml;
+
+    // 关闭预览框
+    setHyperlinkPreviewVisible(false);
+    setHyperlinkPreviewElement(null);
+
+    mindMapRef.current.relayout();
+  };
+
+  // 关闭超链接预览
+  const closeHyperlinkPreview = () => {
+    setTimeout(() => {
+      if (!isHoveringPreviewRef.current) {
+        setHyperlinkPreviewVisible(false);
+        setHyperlinkPreviewElement(null);
+      }
+    }, 100);
+  };
+
+  // 处理超链接确认（插入或编辑）
+  const handleHyperlinkConfirm = (text: string, url: string) => {
+    // 编辑模式
+    if (hyperlinkPopoverMode === 'edit') {
+      if (!mindMapRef.current || !hyperlinkPreviewNodeId || !hyperlinkPreviewElement) return;
+
+      const node = mindMapRef.current.getNodeManager().findNode(hyperlinkPreviewNodeId);
+      if (!node) return;
+
+      mindMapRef.current.saveHistory('editHyperlink', '编辑超链接');
+
+      // 获取当前节点的 HTML 内容
+      const currentHtml = node.richContent?.html || '';
+      
+      // 创建新的链接 HTML（使用传入的 text 作为链接文本，支持编辑）
+      const newLinkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      
+      // 获取旧链接的 outerHTML
+      const oldLinkHtml = hyperlinkPreviewElement.outerHTML;
+
+      // 替换旧链接为新链接
+      const newHtml = currentHtml.replace(oldLinkHtml, newLinkHtml);
+
+      if (!node.richContent) {
+        node.richContent = { html: '', text: '', json: {} };
+      }
+      node.richContent.html = newHtml;
+      // 更新纯文本内容
+      const oldText = node.richContent.text || node.text || '';
+      const newText = oldText.replace(hyperlinkPreviewText, text);
+      node.richContent.text = newText;
+      // 同时更新 node.text 以确保布局计算使用新的文本长度
+      node.text = newText;
+
+      setHyperlinkPreviewElement(null);
+      mindMapRef.current.relayout();
+      return;
+    }
+
+    // 插入模式
+    if (!mindMapRef.current || !activeNodeId) return;
+
+    const node = mindMapRef.current.getNodeManager().findNode(activeNodeId);
+    if (!node) return;
+
+    mindMapRef.current.saveHistory('insertHyperlink', '插入超链接');
+
+    // 检查是否有选中的文字
+    if (hyperlinkHasSelectedText && hyperlinkSelectedText) {
+      try {
+        // 查找高亮 span 元素
+        const nodeElement = document.querySelector(`[data-node-id="${activeNodeId}"] .node-content`);
+        const highlightSpan = nodeElement?.querySelector('.hyperlink-selection-highlight');
+        
+        if (highlightSpan) {
+          // 创建超链接元素替换高亮 span
+          const linkElement = document.createElement('a');
+          linkElement.href = url;
+          linkElement.target = '_blank';
+          linkElement.rel = 'noopener noreferrer';
+          linkElement.textContent = highlightSpan.textContent || text;
+          
+          // 用超链接替换高亮 span（这会自动移除高亮）
+          highlightSpan.parentNode?.replaceChild(linkElement, highlightSpan);
+          
+          // 清除可能残留的其他高亮 span（以防万一）
+          const remainingHighlights = nodeElement?.querySelectorAll('.hyperlink-selection-highlight');
+          remainingHighlights?.forEach(span => {
+            const textNode = document.createTextNode(span.textContent || '');
+            span.parentNode?.replaceChild(textNode, span);
+          });
+          
+          // 获取更新后的节点内容
+          if (nodeElement) {
+            const newHtml = nodeElement.innerHTML;
+            const newText = nodeElement.textContent || '';
+            
+            if (!node.richContent) {
+              node.richContent = { html: '', text: '', json: {} };
+            }
+            node.richContent.html = newHtml;
+            node.richContent.text = newText;
+            node.text = newText; // 同步更新 node.text
+          }
+        } else if (hyperlinkSelectionRangeRef.current) {
+          // 降级：使用保存的 Range
+          const range = hyperlinkSelectionRangeRef.current;
+          const linkElement = document.createElement('a');
+          linkElement.href = url;
+          linkElement.target = '_blank';
+          linkElement.rel = 'noopener noreferrer';
+          linkElement.textContent = text;
+
+          range.deleteContents();
+          range.insertNode(linkElement);
+
+          if (nodeElement) {
+            const newHtml = nodeElement.innerHTML;
+            const newText = nodeElement.textContent || '';
+            
+            if (!node.richContent) {
+              node.richContent = { html: '', text: '', json: {} };
+            }
+            node.richContent.html = newHtml;
+            node.richContent.text = newText;
+            node.text = newText; // 同步更新 node.text
+          }
+        } else {
+          // 最终降级：追加到末尾
+          const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+          const currentHtml = node.richContent?.html || node.text || '';
+          const newHtml = currentHtml + linkHtml;
+          const newText = (node.richContent?.text || node.text || '') + text;
+          
+          if (!node.richContent) {
+            node.richContent = { html: '', text: '', json: {} };
+          }
+          node.richContent.html = newHtml;
+          node.richContent.text = newText;
+          node.text = newText; // 同步更新 node.text
+        }
+      } catch (e) {
+        console.error('Failed to insert hyperlink:', e);
+        // 降级处理：追加到末尾
+        const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+        const currentHtml = node.richContent?.html || node.text || '';
+        const newHtml = currentHtml + linkHtml;
+        const newText = (node.richContent?.text || node.text || '') + text;
+        
+        if (!node.richContent) {
+          node.richContent = { html: '', text: '', json: {} };
+        }
+        node.richContent.html = newHtml;
+        node.richContent.text = newText;
+        node.text = newText; // 同步更新 node.text
+      }
+      
+      // 清除保存的 Range
+      hyperlinkSelectionRangeRef.current = null;
+    } else {
+      // 没有选中文字，将超链接添加到节点文本末尾
+      const linkHtml = `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+      
+      // 直接操作 DOM
+      const nodeContentElement = document.querySelector(`[data-node-id="${activeNodeId}"] .node-content`) as HTMLElement;
+      if (nodeContentElement) {
+        // 在当前内容后追加超链接
+        const linkElement = document.createElement('a');
+        linkElement.href = url;
+        linkElement.target = '_blank';
+        linkElement.rel = 'noopener noreferrer';
+        linkElement.textContent = text;
+        
+        // 添加空格和超链接
+        nodeContentElement.appendChild(document.createTextNode(' '));
+        nodeContentElement.appendChild(linkElement);
+        
+        // 更新节点数据
+        const newHtml = nodeContentElement.innerHTML;
+        const newText = nodeContentElement.textContent || '';
+        
+        if (!node.richContent) {
+          node.richContent = { html: '', text: '', json: {} };
+        }
+        node.richContent.html = newHtml;
+        node.richContent.text = newText;
+        node.text = newText;
+        
+        // 设置样式：居左对齐，不换行
+        // 需要在 relayout 之后再次设置，因为 relayout 会覆盖样式
+        const setNodeStyles = () => {
+          const contentEl = document.querySelector(`[data-node-id="${activeNodeId}"] .node-content`) as HTMLElement;
+          const wrapperEl = document.querySelector(`[data-node-id="${activeNodeId}"]`) as HTMLElement;
+          if (contentEl && wrapperEl) {
+            contentEl.style.textAlign = 'left';
+            contentEl.style.whiteSpace = 'nowrap';
+            wrapperEl.style.justifyContent = 'flex-start';
+            
+            // 计算新的节点宽度
+            const scrollWidth = contentEl.scrollWidth;
+            const padding = 12;
+            const newWidth = scrollWidth + padding * 2;
+            wrapperEl.style.width = `${newWidth}px`;
+          }
+        };
+        
+        // 在 relayout 后延迟执行样式设置
+        requestAnimationFrame(() => {
+          requestAnimationFrame(setNodeStyles);
+        });
+      } else {
+        // 降级：更新节点数据，依赖 relayout 更新 DOM
+        const currentHtml = node.richContent?.html || `<span>${node.text || ''}</span>`;
+        const newHtml = currentHtml + ' ' + linkHtml;
+        const newText = (node.richContent?.text || node.text || '') + ' ' + text;
+        
+        if (!node.richContent) {
+          node.richContent = { html: '', text: '', json: {} };
+        }
+        node.richContent.html = newHtml;
+        node.richContent.text = newText;
+        node.text = newText;
+      }
+    }
 
     mindMapRef.current.relayout();
   };
@@ -1107,7 +1515,62 @@ function App() {
           onStyleChange={handleNodeStyleChange}
           onInsertTable={handleInsertTable}
           onInsertCodeBlock={handleInsertCodeBlock}
+          onInsertHyperlink={handleInsertHyperlink}
           onClose={() => { }}
+        />
+
+        {/* 超链接输入悬浮框 */}
+        <HyperlinkPopover
+          visible={hyperlinkPopoverVisible}
+          mode={hyperlinkPopoverMode}
+          hasSelectedText={hyperlinkHasSelectedText}
+          selectedText={hyperlinkSelectedText}
+          initialText={hyperlinkInitialText}
+          initialUrl={hyperlinkInitialUrl}
+          position={hyperlinkPopoverPosition}
+          onConfirm={handleHyperlinkConfirm}
+          onClose={() => {
+            setHyperlinkPopoverVisible(false);
+            // 清除所有选中高亮
+            const highlightSpans = document.querySelectorAll('.hyperlink-selection-highlight');
+            highlightSpans.forEach(highlightSpan => {
+              // 将高亮 span 的内容恢复为普通文本
+              const textNode = document.createTextNode(highlightSpan.textContent || '');
+              highlightSpan.parentNode?.replaceChild(textNode, highlightSpan);
+            });
+            
+            // 更新当前节点的 richContent（如果有的话）
+            if (activeNodeId && mindMapRef.current) {
+              const nodeElement = document.querySelector(`[data-node-id="${activeNodeId}"] .node-content`);
+              const node = mindMapRef.current.getNodeManager().findNode(activeNodeId);
+              if (nodeElement && node && node.richContent) {
+                node.richContent.html = nodeElement.innerHTML;
+              }
+            }
+            
+            hyperlinkSelectionRangeRef.current = null;
+          }}
+        />
+
+        {/* 超链接预览悬浮框 */}
+        <HyperlinkPreview
+          visible={hyperlinkPreviewVisible}
+          url={hyperlinkPreviewUrl}
+          text={hyperlinkPreviewText}
+          position={hyperlinkPreviewPosition}
+          onEdit={handleEditHyperlink}
+          onDelete={handleDeleteHyperlink}
+          onClose={() => {
+            setHyperlinkPreviewVisible(false);
+            setHyperlinkPreviewElement(null);
+          }}
+          onMouseEnter={() => {
+            isHoveringPreviewRef.current = true;
+          }}
+          onMouseLeave={() => {
+            isHoveringPreviewRef.current = false;
+            closeHyperlinkPreview();
+          }}
         />
 
         {/* 图标选择器 */}

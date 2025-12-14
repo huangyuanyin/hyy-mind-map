@@ -9,6 +9,7 @@ import { TableRow } from '@tiptap/extension-table-row';
 import { TableHeader } from '@tiptap/extension-table-header';
 import { TableCell } from '@tiptap/extension-table-cell';
 import { CodeBlockLowlight } from '@tiptap/extension-code-block-lowlight';
+import { Link } from '@tiptap/extension-link';
 import { TextSelection } from '@tiptap/pm/state';
 import { common, createLowlight } from 'lowlight';
 import './RichTextEditor.css';
@@ -79,6 +80,15 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({
       CustomTableCell,
       CodeBlockLowlight.configure({
         lowlight,
+      }),
+      Link.configure({
+        openOnClick: true,
+        autolink: true,
+        defaultProtocol: 'https',
+        HTMLAttributes: {
+          target: '_blank',
+          rel: 'noopener noreferrer',
+        },
       }),
     ],
     content: initialContent,
