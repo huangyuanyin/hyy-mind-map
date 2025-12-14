@@ -1,0 +1,10 @@
+export { default as IconCheck } from '@/assets/icons/ui/check.svg?react';
+export { default as IconLink } from '@/assets/icons/ui/link.svg?react';
+export { default as IconEdit } from '@/assets/icons/ui/edit.svg?react';
+export { default as IconDelete } from '@/assets/icons/ui/delete.svg?react';
+export { default as IconBold } from '@/assets/icons/ui/bold.svg?react';
+export { default as IconItalic } from '@/assets/icons/ui/italic.svg?react';
+export { default as IconUnderline } from '@/assets/icons/ui/underline.svg?react';
+export { default as IconStrikethrough } from '@/assets/icons/ui/strikethrough.svg?react';
+export { default as IconTable } from '@/assets/icons/ui/table.svg?react';
+export { default as IconCode } from '@/assets/icons/ui/code.svg?react';

@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { IconBold, IconItalic, IconUnderline, IconStrikethrough, IconTable, IconCode, IconLink } from './Icon';
 import './NodeFormatToolbar.css';
 
 interface NodeStyle {
@@ -191,53 +192,39 @@ export const NodeFormatToolbar: React.FC<NodeFormatToolbarProps> = ({
         {showTextFormat && (
           <div className="dropdown-panel text-format-panel">
             {/* 粗体 */}
-            <button 
+            <button
               className={`format-btn ${currentStyle?.bold ? 'active' : ''}`}
               title="粗体"
               onClick={() => onStyleChange(nodeId, { bold: !currentStyle?.bold })}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" stroke="currentColor" strokeWidth="2.5" fill="none"/>
-                <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z" stroke="currentColor" strokeWidth="2.5" fill="none"/>
-              </svg>
+              <IconBold width={18} height={18} />
             </button>
 
             {/* 斜体 */}
-            <button 
+            <button
               className={`format-btn ${currentStyle?.italic ? 'active' : ''}`}
               title="斜体"
               onClick={() => onStyleChange(nodeId, { italic: !currentStyle?.italic })}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <line x1="14" y1="4" x2="10" y2="20" stroke="currentColor" strokeWidth="2.5"/>
-                <line x1="8" y1="4" x2="16" y2="4" stroke="currentColor" strokeWidth="2"/>
-                <line x1="8" y1="20" x2="16" y2="20" stroke="currentColor" strokeWidth="2"/>
-              </svg>
+              <IconItalic width={18} height={18} />
             </button>
 
             {/* 下划线 */}
-            <button 
+            <button
               className={`format-btn ${currentStyle?.underline ? 'active' : ''}`}
               title="下划线"
               onClick={() => onStyleChange(nodeId, { underline: !currentStyle?.underline })}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M6 4v6a6 6 0 0 0 12 0V4" stroke="currentColor" strokeWidth="2.5" fill="none"/>
-                <line x1="4" y1="20" x2="20" y2="20" stroke="currentColor" strokeWidth="2.5"/>
-              </svg>
+              <IconUnderline width={18} height={18} />
             </button>
 
             {/* 删除线 */}
-            <button 
+            <button
               className={`format-btn ${currentStyle?.strikethrough ? 'active' : ''}`}
               title="删除线"
               onClick={() => onStyleChange(nodeId, { strikethrough: !currentStyle?.strikethrough })}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-                <path d="M5 12h14" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-                <path d="M17.5 7.5C17.5 5.5 15.5 4 12 4C8.5 4 6.5 5.5 6.5 7.5C6.5 9.5 8 10.5 12 11.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
-                <path d="M6.5 16.5C6.5 18.5 8.5 20 12 20C15.5 20 17.5 18.5 17.5 16.5C17.5 14.5 16 13.5 12 12.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none"/>
-              </svg>
+              <IconStrikethrough width={18} height={18} />
             </button>
           </div>
         )}
@@ -246,44 +233,35 @@ export const NodeFormatToolbar: React.FC<NodeFormatToolbarProps> = ({
       <div className="toolbar-divider" />
 
       {/* 表格 */}
-      <button 
+      <button
         className="toolbar-btn"
         title="插入表格"
         onClick={() => onInsertTable(nodeId)}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/>
-          <line x1="3" y1="9" x2="21" y2="9" stroke="currentColor" strokeWidth="1.5"/>
-          <line x1="3" y1="15" x2="21" y2="15" stroke="currentColor" strokeWidth="1.5"/>
-          <line x1="9" y1="3" x2="9" y2="21" stroke="currentColor" strokeWidth="1.5"/>
-          <line x1="15" y1="3" x2="15" y2="21" stroke="currentColor" strokeWidth="1.5"/>
-        </svg>
+        <IconTable width={20} height={20} />
       </button>
 
       {/* 代码块 */}
-      <button 
+      <button
         className="toolbar-btn"
         title="插入代码块"
         onClick={() => onInsertCodeBlock(nodeId)}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <polyline points="16 18 22 12 16 6" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-          <polyline points="8 6 2 12 8 18" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <IconCode width={20} height={20} />
       </button>
 
       <div className="toolbar-divider" />
 
       {/* 超链接 */}
-      <button 
+      <button
         className="toolbar-btn"
         title="插入超链接"
         onMouseDown={(e) => {
           e.preventDefault();
           // 在 mousedown 时获取选区（此时选区还存在）
           const selection = window.getSelection();
-          const selectedText = selection && selection.toString().trim().length > 0 
-            ? selection.toString().trim() 
+          const selectedText = selection && selection.toString().trim().length > 0
+            ? selection.toString().trim()
             : '';
           // 保存选区的 Range，用于后续替换
           let selectionRange: Range | null = null;
@@ -293,10 +271,7 @@ export const NodeFormatToolbar: React.FC<NodeFormatToolbarProps> = ({
           onInsertHyperlink(nodeId, selectedText, selectionRange);
         }}
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
+        <IconLink width={20} height={20} />
       </button>
     </div>
   );

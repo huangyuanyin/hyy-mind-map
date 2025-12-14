@@ -22,6 +22,10 @@ export interface HyperlinkPopoverState {
   initialText: string;
   initialUrl: string;
   position: Position;
+  /** 编辑模式下的节点 ID */
+  nodeId?: string | null;
+  /** 编辑模式下的链接元素 */
+  element?: HTMLAnchorElement | null;
 }
 
 /**

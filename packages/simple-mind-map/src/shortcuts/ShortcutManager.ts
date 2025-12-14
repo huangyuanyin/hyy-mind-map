@@ -61,10 +61,6 @@ export class ShortcutManager {
 
     // 按优先级排序（高优先级在前）
     this.shortcuts.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
-
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Registered:', fullConfig.key, fullConfig.command.name);
-    }
   }
 
   /**
@@ -81,9 +77,6 @@ export class ShortcutManager {
     const index = this.shortcuts.findIndex(s => s.command.id === commandId);
     if (index !== -1) {
       this.shortcuts.splice(index, 1);
-      if (this.options.debug) {
-        console.log('[ShortcutManager] Unregistered:', commandId);
-      }
     }
   }
 
@@ -92,9 +85,6 @@ export class ShortcutManager {
    */
   public setContext(context: ShortcutContext): void {
     this.contextStack = [context];
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Context changed to:', context);
-    }
   }
 
   /**
@@ -102,9 +92,6 @@ export class ShortcutManager {
    */
   public pushContext(context: ShortcutContext): void {
     this.contextStack.push(context);
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Context pushed:', context, 'Stack:', this.contextStack);
-    }
   }
 
   /**
@@ -112,9 +99,6 @@ export class ShortcutManager {
    */
   public popContext(): void {
     this.contextStack.pop();
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Context popped. Stack:', this.contextStack);
-    }
   }
 
   /**
@@ -129,16 +113,11 @@ export class ShortcutManager {
    */
   public startListening(target: HTMLElement | Window = window): void {
     if (this.keydownHandler) {
-      console.warn('[ShortcutManager] Already listening');
       return;
     }
 
     this.keydownHandler = (e: KeyboardEvent) => this.handleKeyDown(e);
     target.addEventListener('keydown', this.keydownHandler as EventListener);
-
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Started listening');
-    }
   }
 
   /**
@@ -148,9 +127,6 @@ export class ShortcutManager {
     if (this.keydownHandler) {
       target.removeEventListener('keydown', this.keydownHandler as EventListener);
       this.keydownHandler = null;
-      if (this.options.debug) {
-        console.log('[ShortcutManager] Stopped listening');
-      }
     }
   }
 
@@ -162,10 +138,6 @@ export class ShortcutManager {
 
     // 解析按键信息
     const keyInfo = this.parseKeyEvent(e);
-
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Key pressed:', keyInfo.normalized);
-    }
 
     // 按优先级匹配快捷键
     for (const shortcut of this.shortcuts) {
@@ -181,15 +153,7 @@ export class ShortcutManager {
 
       // 检查命令是否可执行
       if (shortcut.command.canExecute && !shortcut.command.canExecute()) {
-        if (this.options.debug) {
-          console.log('[ShortcutManager] Command cannot execute:', shortcut.command.id);
-        }
         continue;
-      }
-
-      // 执行命令
-      if (this.options.debug) {
-        console.log('[ShortcutManager] Executing command:', shortcut.command.name);
       }
 
       if (shortcut.preventDefault) {
@@ -316,9 +280,6 @@ export class ShortcutManager {
    */
   public enable(): void {
     this.options.enabled = true;
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Enabled');
-    }
   }
 
   /**
@@ -326,9 +287,6 @@ export class ShortcutManager {
    */
   public disable(): void {
     this.options.enabled = false;
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Disabled');
-    }
   }
 
   /**
@@ -353,8 +311,5 @@ export class ShortcutManager {
     this.shortcuts = [];
     this.contextStack = [];
     this.clipboard = null;
-    if (this.options.debug) {
-      console.log('[ShortcutManager] Destroyed');
-    }
   }
 }

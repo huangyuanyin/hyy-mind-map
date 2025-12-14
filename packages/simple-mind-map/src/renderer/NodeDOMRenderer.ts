@@ -196,12 +196,10 @@ export class NodeDOMRenderer {
 
     let element = this.nodeElements.get(node.id);
     if (!element) {
-      console.log('[NodeDOMRenderer] Creating new element for node:', node.id);
       element = this.createNodeElement(node);
       this.nodeElements.set(node.id, element);
       this.nodesContainer.appendChild(element);
     } else {
-      console.log('[NodeDOMRenderer] Reusing existing element for node:', node.id);
     }
 
     this.updateNodeElement(element, node);
@@ -240,7 +238,6 @@ export class NodeDOMRenderer {
    * 创建节点 DOM 元素
    */
   private createNodeElement(node: HyyMindMapNode): HTMLElement {
-    console.log('[NodeDOMRenderer] createNodeElement called for node:', node.id);
     const element = document.createElement('div');
     element.className = 'mind-map-node';
     element.dataset.nodeId = node.id;
@@ -257,7 +254,7 @@ export class NodeDOMRenderer {
       color: ${this.theme.nodeTextColor};
       display: flex;
       align-items: center;
-      justify-content: flex-start;
+      justify-content: center;
       padding: ${this.theme.padding}px;
       transition: box-shadow 0.2s, border-color 0.2s;
     `;
@@ -269,6 +266,7 @@ export class NodeDOMRenderer {
       text-align: left;
       white-space: nowrap;
       overflow: visible;
+      display: inline-block;
     `;
     element.appendChild(contentContainer);
 
@@ -325,20 +323,8 @@ export class NodeDOMRenderer {
       }
     });
 
-    // 添加日志 - 监听所有鼠标事件来调试
-    element.addEventListener('mousedown', (e) => {
-      console.log('[NodeDOMRenderer] mousedown on element', element.dataset.nodeId, e);
-    });
-    element.addEventListener('mouseup', (e) => {
-      console.log('[NodeDOMRenderer] mouseup on element', element.dataset.nodeId, e);
-    });
-    element.addEventListener('click', (e) => {
-      console.log('[NodeDOMRenderer] click on element', element.dataset.nodeId, e);
-    });
-
     // 绑定双击事件（进入编辑模式）- 直接在节点元素上绑定，确保始终有效
     element.addEventListener('dblclick', (e) => {
-      console.log('[NodeDOMRenderer] dblclick event on element', element.dataset.nodeId);
       // 如果点击的是可编辑单元格或代码块，不触发节点编辑
       const target = e.target as HTMLElement;
       if (target.classList.contains('editable-cell') ||
@@ -346,17 +332,14 @@ export class NodeDOMRenderer {
           target.closest('.editable-cell') ||
           target.closest('.code-content') ||
           target.closest('.node-code-block')) {
-        console.log('[NodeDOMRenderer] Ignoring dblclick on special element');
         return;
       }
 
       const nodeId = element.dataset.nodeId;
       if (!nodeId) {
-        console.log('[NodeDOMRenderer] No nodeId found');
         return;
       }
 
-      console.log('[NodeDOMRenderer] Starting edit for node:', nodeId);
       e.stopPropagation();
       e.preventDefault();
       this.startEdit(nodeId, e.clientX, e.clientY);
@@ -396,17 +379,22 @@ export class NodeDOMRenderer {
     if (!isEditing) {
       const contentContainer = element.querySelector('.node-content') as HTMLElement;
       if (contentContainer) {
+        element.style.justifyContent = 'center';
+
+        contentContainer.style.display = 'inline-block';
+        contentContainer.style.textAlign = 'left';
+
         // 根据节点宽度决定是否允许换行
         const needsWrap = node.width >= LAYOUT.MAX_NODE_WIDTH;
-        contentContainer.style.maxWidth = needsWrap ? `${LAYOUT.MAX_NODE_WIDTH - this.theme.padding * 2}px` : 'none';
+        if (needsWrap) {
+          contentContainer.style.maxWidth = `${LAYOUT.MAX_NODE_WIDTH - this.theme.padding * 2}px`;
+        } else {
+          contentContainer.style.maxWidth = '';
+        }
         contentContainer.style.whiteSpace = needsWrap ? 'normal' : 'nowrap';
         contentContainer.style.wordWrap = needsWrap ? 'break-word' : 'normal';
         contentContainer.style.wordBreak = needsWrap ? 'break-all' : 'normal';
-        // 始终居左对齐
-        contentContainer.style.textAlign = 'left';
-        element.style.justifyContent = 'flex-start';
         
-        console.log('[NodeDOMRenderer] updateNodeElement for node:', node.id, 'will modify innerHTML');
         // 渲染图标（图标在所有情况下都需要渲染）
         // 图标尺寸与 constants/index.ts 中的 ICON 常量保持一致
         const ICON_SIZE = 20;
@@ -431,16 +419,13 @@ export class NodeDOMRenderer {
         
         // 计算新的 HTML 内容
         let newHtml = '';
-        let newTextAlign = 'center';
 
         if (attachment?.type === 'table' && attachment.table) {
           // 渲染图标 + 表格
           newHtml = iconsHtml + this.renderTableHTML(attachment.table, node.id);
-          newTextAlign = 'left';
         } else if (attachment?.type === 'code' && attachment.codeBlock) {
           // 渲染图标 + 代码块
           newHtml = iconsHtml + this.renderCodeBlockHTML(attachment.codeBlock, node.id);
-          newTextAlign = 'left';
         } else {
           // 检查节点是否有内容
           const nodeText = node.text?.trim() || '';
@@ -466,7 +451,6 @@ export class NodeDOMRenderer {
         // 只有当内容真的变化时才修改 innerHTML（避免破坏事件监听器）
         const currentHtml = contentContainer.innerHTML;
         if (currentHtml !== newHtml) {
-          console.log('[NodeDOMRenderer] innerHTML changed for node:', node.id, 'updating DOM');
           contentContainer.innerHTML = newHtml;
 
           // 更新 placeholder 类
@@ -478,13 +462,9 @@ export class NodeDOMRenderer {
 
           // 绑定事件（只在 innerHTML 更新后才需要重新绑定）
           if (attachment?.type === 'table' && attachment.table) {
-            contentContainer.style.textAlign = 'left';
             this.bindTableCellEvents(contentContainer, node.id);
           } else if (attachment?.type === 'code' && attachment.codeBlock) {
-            contentContainer.style.textAlign = 'left';
             this.bindCodeBlockEvents(contentContainer, node.id);
-          } else {
-            contentContainer.style.textAlign = newTextAlign;
           }
         }
         
@@ -582,10 +562,8 @@ export class NodeDOMRenderer {
    * @param clientY 鼠标点击的 Y 坐标（可选，用于定位光标）
    */
   public startEdit(nodeId: string, clientX?: number, clientY?: number): void {
-    console.log('[NodeDOMRenderer] startEdit called for node:', nodeId);
     // 如果正在编辑同一个节点，不重复处理
     if (this.editingNodeId === nodeId) {
-      console.log('[NodeDOMRenderer] Already editing this node');
       return;
     }
     
@@ -604,17 +582,14 @@ export class NodeDOMRenderer {
 
     const element = this.nodeElements.get(nodeId);
     if (!element) {
-      console.log('[NodeDOMRenderer] Element not found for node:', nodeId);
       return;
     }
 
     const contentContainer = element.querySelector('.node-content') as HTMLElement;
     if (!contentContainer) {
-      console.log('[NodeDOMRenderer] Content container not found');
       return;
     }
 
-    console.log('[NodeDOMRenderer] Setting contentEditable to true');
     this.editingNodeId = nodeId;
 
     // 获取图标容器（如果有）- 在修改 innerHTML 之前获取
@@ -643,12 +618,8 @@ export class NodeDOMRenderer {
     contentContainer.style.userSelect = 'text';
     contentContainer.style.minWidth = '20px';
 
-    console.log('[NodeDOMRenderer] contentEditable set, value:', contentContainer.contentEditable);
-    console.log('[NodeDOMRenderer] contentContainer:', contentContainer);
-
     // 聚焦
     contentContainer.focus();
-    console.log('[NodeDOMRenderer] After focus, activeElement:', document.activeElement);
 
     // 如果有鼠标坐标，将光标定位到点击位置
     if (clientX !== undefined && clientY !== undefined && contentContainer.textContent) {

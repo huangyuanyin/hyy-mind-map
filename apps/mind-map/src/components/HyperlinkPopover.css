@@ -1,47 +1,64 @@
+.hyperlink-popover-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1002;
+  background: transparent;
+}
+
 .hyperlink-popover {
   position: fixed;
   z-index: 1003;
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15), 0 0 0 1px rgba(0, 0, 0, 0.05);
-  min-width: 320px;
-  animation: hyperlinkPopoverIn 0.2s ease-out;
-  overflow: hidden;
+  border-radius: 6px;
+  box-shadow: 0 2px 16px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e5e5;
+  min-width: 360px;
+  animation: hyperlinkPopoverIn 0.15s ease-out;
 }
 
 @keyframes hyperlinkPopoverIn {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: scale(1);
   }
 }
 
 .hyperlink-popover-header {
-  padding: 14px 16px 10px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 8px 12px;
 }
 
 .hyperlink-popover-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #1a1a1a;
+  font-size: 13px;
+  font-weight: 500;
+  color: #171717;
+  letter-spacing: -0.01em;
 }
 
 .hyperlink-popover-body {
-  padding: 16px;
+  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
 }
 
 .hyperlink-input-group {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
+}
+
+.hyperlink-input-label {
+  font-size: 12px;
+  color: #525252;
+  white-space: nowrap;
+  min-width: 24px;
 }
 
 .hyperlink-input-row {
@@ -52,70 +69,120 @@
 
 .hyperlink-input {
   flex: 1;
-  height: 40px;
-  padding: 0 14px;
-  border: 1.5px solid #e0e0e0;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #333;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d4d4d4;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #171717;
   background: #fff;
   transition: all 0.15s ease;
   outline: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  box-sizing: border-box;
+  line-height: 26px;
+}
+
+.hyperlink-input:hover {
+  border-color: #a3a3a3;
 }
 
 .hyperlink-input:focus {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.1);
+  border-color: #171717;
+  box-shadow: 0 0 0 1px #171717;
 }
 
 .hyperlink-input::placeholder {
-  color: #999;
+  color: #a3a3a3;
 }
 
 .hyperlink-input-group.has-error .hyperlink-input,
 .hyperlink-input-row.has-error .hyperlink-input {
-  border-color: #ff4d4f;
+  border-color: #dc2626;
 }
 
 .hyperlink-input-group.has-error .hyperlink-input:focus,
 .hyperlink-input-row.has-error .hyperlink-input:focus {
-  box-shadow: 0 0 0 3px rgba(255, 77, 79, 0.1);
+  border-color: #dc2626;
+  box-shadow: 0 0 0 1px #dc2626;
 }
 
 .hyperlink-error {
   font-size: 12px;
-  color: #ff4d4f;
-  margin-top: 2px;
+  color: #dc2626;
+  margin-top: 6px;
+  margin-left: 1px;
 }
 
 .hyperlink-confirm-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: #1890ff;
-  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #171717;
+  background: #171717;
+  border-radius: 4px;
   cursor: pointer;
   color: #fff;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.hyperlink-confirm-btn svg {
+  display: block;
+  flex-shrink: 0;
 }
 
 .hyperlink-confirm-btn:hover {
-  background: #40a9ff;
+  background: #404040;
+  border-color: #404040;
 }
 
 .hyperlink-confirm-btn:active {
-  background: #096dd9;
+  transform: scale(0.98);
 }
 
-/* 响应式 */
+.hyperlink-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid #d4d4d4;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #737373;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.hyperlink-delete-btn svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.hyperlink-delete-btn:hover {
+  background: #fef2f2;
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+.hyperlink-delete-btn:active {
+  transform: scale(0.98);
+}
+
 @media (max-width: 480px) {
   .hyperlink-popover {
-    min-width: 280px;
+    min-width: 300px;
     max-width: calc(100vw - 32px);
+  }
+
+  .hyperlink-input {
+    font-size: 16px; /* 防止移动端自动缩放 */
   }
 }
 

@@ -49,3 +49,13 @@ button:focus-visible {
 .node-content a:active {
   color: #096dd9;
 }
+
+.node-content a.hyperlink-editing-highlight {
+  background-color: #b4d7ff;
+  border-radius: 2px;
+}
+
+.hyperlink-selection-highlight {
+  background-color: #b4d7ff;
+  border-radius: 2px;
+}
