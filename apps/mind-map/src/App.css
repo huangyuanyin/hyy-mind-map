@@ -59,3 +59,8 @@ button:focus-visible {
   background-color: #b4d7ff;
   border-radius: 2px;
 }
+
+/* Arco Design Message 位置调整 */
+.arco-message-wrapper {
+  top: 15% !important;
+}

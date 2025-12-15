@@ -1,5 +1,8 @@
 import { useState, useEffect } from 'react';
 import { icons } from '../assets/icons';
+import { BUILT_IN_THEMES } from 'hyy-mind-map';
+import { Message } from '@arco-design/web-react';
+import { generateThemePreviewSVG } from '../utils/themePreview';
 import './IconSelector.css';
 
 // 图标分类
@@ -16,9 +19,19 @@ interface IconSelectorProps {
   onSelect: (icons: Record<string, string>) => void;
   onClose: () => void;
   initialIcons?: Record<string, string>; // 初始选中的图标，格式：{ priority: 'iconUrl', progress: 'iconUrl' }
+  onThemeChange?: (themeId: string) => void; // 主题切换回调
+  currentThemeId?: string; // 当前选中的主题 ID
+  hasSelectedNode?: boolean; // 是否有选中的节点
 }
 
-export const IconSelector: React.FC<IconSelectorProps> = ({ onSelect, onClose, initialIcons = {} }) => {
+export const IconSelector: React.FC<IconSelectorProps> = ({
+  onSelect,
+  onClose,
+  initialIcons = {},
+  onThemeChange,
+  currentThemeId = 'classic-teal',
+  hasSelectedNode = false
+}) => {
   const [activeMainTab, setActiveMainTab] = useState<'style' | 'theme' | 'layout' | 'icon'>('icon');
   const [activeSubTab, setActiveSubTab] = useState<'icon' | 'sticker' | 'image'>('icon');
   // 跟踪每个分类选中的图标，格式：{ priority: 'priority_1', progress: 'progress_3' }
@@ -68,6 +81,11 @@ export const IconSelector: React.FC<IconSelectorProps> = ({ onSelect, onClose, i
   };
 
   const handleIconClick = (iconName: string) => {
+    if (!hasSelectedNode) {
+      Message.warning('请先选择一个分支节点或总节点');
+      return;
+    }
+
     const iconUrl = icons[iconName];
     if (!iconUrl) return;
 
@@ -116,6 +134,10 @@ export const IconSelector: React.FC<IconSelectorProps> = ({ onSelect, onClose, i
 
   return (
     <div className="icon-selector">
+      <button className="close-btn" onClick={onClose}>
+        ✕
+      </button>
+
       {/* 主导航 Tab */}
       <div className="main-tabs">
         <button
@@ -141,9 +163,6 @@ export const IconSelector: React.FC<IconSelectorProps> = ({ onSelect, onClose, i
           onClick={() => setActiveMainTab('icon')}
         >
           图标
-        </button>
-        <button className="close-btn" onClick={onClose}>
-          ✕
         </button>
       </div>
 
@@ -215,8 +234,38 @@ export const IconSelector: React.FC<IconSelectorProps> = ({ onSelect, onClose, i
         </>
       )}
 
+      {/* 主题 Tab 的内容 */}
+      {activeMainTab === 'theme' && (
+        <div className="theme-grid">
+          {BUILT_IN_THEMES.map((preset) => {
+            const svgDataUrl = `data:image/svg+xml,${encodeURIComponent(
+              generateThemePreviewSVG(preset)
+            )}`;
+            const isSelected = currentThemeId === preset.id;
+
+            return (
+              <div
+                key={preset.id}
+                className={`theme-card ${isSelected ? 'selected' : ''}`}
+                onClick={() => onThemeChange?.(preset.id)}
+                title={preset.description}
+              >
+                <div className="theme-preview-wrapper">
+                  <img
+                    src={svgDataUrl}
+                    alt={preset.name}
+                    className="theme-preview"
+                  />
+                </div>
+                <span className="theme-name">{preset.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* 其他 Tab 的占位内容 */}
-      {activeMainTab !== 'icon' && (
+      {activeMainTab !== 'icon' && activeMainTab !== 'theme' && (
         <div style={{
           flex: 1,
           display: 'flex',
@@ -226,7 +275,6 @@ export const IconSelector: React.FC<IconSelectorProps> = ({ onSelect, onClose, i
           fontSize: '14px'
         }}>
           {activeMainTab === 'style' && '样式功能开发中...'}
-          {activeMainTab === 'theme' && '主题功能开发中...'}
           {activeMainTab === 'layout' && '布局功能开发中...'}
         </div>
       )}

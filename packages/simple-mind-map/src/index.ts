@@ -80,6 +80,8 @@ export {
 // ==================== 常量 ====================
 export { LAYOUT, ZOOM, DRAG, EXPAND_INDICATOR, ICON, SHADOW, MOUSE_BUTTON } from './constants';
 export { DEFAULT_THEME, getLightColor } from './constants/theme';
+export { BUILT_IN_THEMES } from './constants/themes';
+export type { ThemePreset } from './constants/themes';
 
 // ==================== 类型 ====================
 export type {
@@ -106,3 +108,13 @@ export type {
 } from './types/interfaces';
 
 export type { Command, ShortcutConfig, KeyInfo, ShortcutManagerOptions } from './shortcuts';
+
+// ==================== 插件系统 ====================
+export { Plugin, PluginManager, PluginLifecycle } from './plugins';
+export type { PluginContext, PluginMetadata, PluginClass, PluginRegistration } from './plugins';
+
+export { RichTextPlugin } from './plugins/RichTextPlugin';
+export type { RichTextOptions } from './plugins/RichTextPlugin';
+
+export { ThemePlugin } from './plugins/ThemePlugin';
+export type { ThemeOptions } from './plugins/ThemePlugin';

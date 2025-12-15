@@ -87,3 +87,6 @@ export const MOUSE_BUTTON = {
   RIGHT: 2,
 } as const;
 
+export * from './themes';
+export { DEFAULT_THEME, COLOR_LIGHT_VARIANTS, getLightColor } from './theme';
+

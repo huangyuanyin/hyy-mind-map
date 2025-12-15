@@ -12,6 +12,9 @@ import { NodeService } from './services/NodeService';
 import { ViewService } from './services/ViewService';
 import { SelectionService } from './services/SelectionService';
 import { PerformanceUtils } from './utils';
+import { PluginManager, type PluginClass, type PluginContext, PluginLifecycle, type Plugin } from './plugins';
+import type { RichTextPlugin } from './plugins/RichTextPlugin';
+import type { ThemePlugin } from './plugins/ThemePlugin';
 
 /**
  * MindMap 配置选项
@@ -43,6 +46,24 @@ export interface MindMapOptions {
  * MindMap - 思维导图主类（新版）
  */
 export class MindMap {
+  // ==================== 静态方法（插件注册） ====================
+
+  /**
+   * 注册插件
+   */
+  static usePlugin(pluginClass: PluginClass, options?: any): void {
+    PluginManager.register(pluginClass, options);
+  }
+
+  /**
+   * 移除已注册的插件
+   */
+  static removePlugin(pluginName: string): void {
+    PluginManager.unregister(pluginName);
+  }
+
+  // ==================== 实例属性 ====================
+
   // DOM 元素
   private container: HTMLElement;
   private canvas: HTMLCanvasElement;
@@ -65,6 +86,12 @@ export class MindMap {
   // 其他模块
   private historyManager: HistoryManager;
   private shortcutManager: ShortcutManager;
+
+  // 插件管理器
+  public pluginManager: PluginManager;
+
+  // 插件初始化 Promise
+  private pluginsReady: Promise<void>;
 
   // ResizeObserver
   private resizeObserver: ResizeObserver | null = null;
@@ -95,13 +122,7 @@ export class MindMap {
 
     this.layoutEngine = new LayoutEngine(this.renderer);
 
-    // 6. 初始化 DOM 节点渲染器（如果启用）
-    if (options.useDOMNodes) {
-      this.nodeDOMRenderer = new NodeDOMRenderer(this.container, options.theme);
-      this.setupDOMRendererCallbacks();
-    }
-
-    // 7. 初始化历史管理器
+    // 6. 初始化历史管理器
     this.historyManager = new HistoryManager({
       maxHistorySize: options.maxHistorySize ?? 50,
     });
@@ -146,7 +167,13 @@ export class MindMap {
     // 11. 初始化
     this.init();
 
-    // 12. 加载数据
+    // 12. 初始化插件管理器
+    this.pluginManager = new PluginManager();
+
+    // 13. 初始化插件（异步，保存 Promise 以便外部等待）
+    this.pluginsReady = this.initializePlugins();
+
+    // 14. 加载数据
     if (options.data) {
       this.setData(options.data);
     }
@@ -278,60 +305,56 @@ export class MindMap {
     );
   }
 
+  // ==================== 插件系统方法 ====================
+
   /**
-   * 设置 DOM 渲染器回调
+   * 初始化插件
    */
-  private setupDOMRendererCallbacks(): void {
-    if (!this.nodeDOMRenderer) return;
+  private async initializePlugins(): Promise<void> {
+    const context: PluginContext = {
+      mindMap: this,
+      stateManager: this.stateManager,
+      nodeManager: this.nodeManager,
+      eventSystem: this.eventSystem,
+      nodeService: this.nodeService,
+      viewService: this.viewService,
+      selectionService: this.selectionService,
+      renderer: this.renderer,
+      layoutEngine: this.layoutEngine,
+      historyManager: this.historyManager,
+      container: this.container,
+      canvas: this.canvas,
+    };
 
-    // 编辑完成回调
-    this.nodeDOMRenderer.setEditCompleteCallback((nodeId, content) => {
-      this.handleEditComplete(nodeId, content);
-    });
+    await this.pluginManager.initializePlugins(context);
+  }
 
-    // 节点点击回调
-    this.nodeDOMRenderer.setNodeClickCallback((nodeId) => {
-      const node = this.nodeManager.findNode(nodeId);
-      if (node) {
-        this.selectionService.setActiveNode(node);
-        this.scheduleRender();
-      }
-    });
+  /**
+   * 等待插件初始化完成
+   */
+  ready(): Promise<void> {
+    return this.pluginsReady;
+  }
 
-    // 节点鼠标按下回调（用于拖拽）
-    this.nodeDOMRenderer.setNodeMouseDownCallback((nodeId, event) => {
-      const node = this.nodeManager.findNode(nodeId);
-      if (node) {
-        // 使用 EventSystem 的 simulateNodeMouseDown 来处理拖拽
-        this.eventSystem.simulateNodeMouseDown(node, event);
-      }
-    });
+  /**
+   * 获取插件实例
+   */
+  getPlugin<T extends Plugin>(name: string): T | undefined {
+    return this.pluginManager.getPlugin<T>(name);
+  }
 
-    // 表格更新回调
-    this.nodeDOMRenderer.setTableUpdateCallback((nodeId, table) => {
-      const node = this.nodeManager.findNode(nodeId);
-      if (node?.config?.attachment) {
-        this.saveHistory('updateTable', '更新表格');
-        node.config.attachment.table = table;
-        this.relayout();
-      }
-    });
+  /**
+   * 访问 RichText 插件
+   */
+  get richText(): RichTextPlugin | undefined {
+    return this.pluginManager.getPlugin<RichTextPlugin>('richText');
+  }
 
-    // 代码块更新回调
-    this.nodeDOMRenderer.setCodeBlockUpdateCallback((nodeId, codeBlock) => {
-      const node = this.nodeManager.findNode(nodeId);
-      if (node?.config?.attachment) {
-        this.saveHistory('updateCodeBlock', '更新代码块');
-        node.config.attachment.codeBlock = codeBlock;
-        this.relayout();
-      }
-    });
-
-    // 清除附件回调
-    this.nodeDOMRenderer.setClearAttachmentCallback((nodeId) => {
-      this.saveHistory('clearAttachment', '清除附件');
-      this.clearNodeAttachment(nodeId);
-    });
+  /**
+   * 访问 Theme 插件
+   */
+  get theme(): ThemePlugin | undefined {
+    return this.pluginManager.getPlugin<ThemePlugin>('theme');
   }
 
   /**
@@ -481,12 +504,20 @@ export class MindMap {
    */
   private performRender(): void {
     const root = this.nodeManager.getRoot();
+
+    // 触发渲染前钩子
+    this.pluginManager.emitLifecycle(PluginLifecycle.BEFORE_RENDER, root);
+
+    // Canvas 渲染
     this.renderer.render(root);
 
     // DOM 节点渲染
     if (this.nodeDOMRenderer) {
       this.nodeDOMRenderer.render(root);
     }
+
+    // 触发渲染后钩子
+    this.pluginManager.emitLifecycle(PluginLifecycle.AFTER_RENDER, root);
   }
 
   /**
@@ -509,6 +540,14 @@ export class MindMap {
    * 开始编辑节点
    */
   startEditNode(nodeId: string): void {
+    // 优先使用 RichTextPlugin
+    const richTextPlugin = this.richText;
+    if (richTextPlugin) {
+      richTextPlugin.startEdit(nodeId);
+      return;
+    }
+
+    // 向后兼容：如果没有 RichTextPlugin，使用 nodeDOMRenderer
     if (this.nodeDOMRenderer) {
       this.nodeDOMRenderer.startEdit(nodeId);
     }
@@ -518,22 +557,16 @@ export class MindMap {
    * 结束编辑节点
    */
   endEditNode(): void {
+    // 优先使用 RichTextPlugin
+    const richTextPlugin = this.richText;
+    if (richTextPlugin) {
+      richTextPlugin.endEdit();
+      return;
+    }
+
+    // 向后兼容：如果没有 RichTextPlugin，使用 nodeDOMRenderer
     if (this.nodeDOMRenderer) {
       this.nodeDOMRenderer.endEdit();
-    }
-  }
-
-  /**
-   * 处理编辑完成
-   */
-  private handleEditComplete(nodeId: string, content: { html?: string; text?: string }): void {
-    const result = this.nodeService.updateNodeText(nodeId, content.text || '');
-    if (result.success && result.node) {
-      result.node.richContent = {
-        html: content.html,
-        text: content.text,
-      };
-      this.relayout();
     }
   }
 
@@ -807,7 +840,9 @@ export class MindMap {
   /**
    * 销毁
    */
-  destroy(): void {
+  async destroy(): Promise<void> {
+    await this.pluginManager.destroyAll();
+
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
