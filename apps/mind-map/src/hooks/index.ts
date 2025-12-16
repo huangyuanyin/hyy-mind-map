@@ -9,3 +9,6 @@ export type { UseNodeOperationsReturn } from './useNodeOperations';
 
 export { useHyperlinkManager } from './useHyperlinkManager';
 export { useClickOutside } from './useClickOutside';
+
+export { useTableMenuManager } from './useTableMenuManager';
+export { useTableOperations } from './useTableOperations';

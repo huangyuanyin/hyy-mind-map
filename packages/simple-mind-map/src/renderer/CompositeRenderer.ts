@@ -10,7 +10,7 @@ import {
   DragPreviewRenderer,
 } from './strategies';
 import { DEFAULT_THEME } from '../constants/theme';
-import { ICON } from '../constants';
+import { ICON, TABLE } from '../constants';
 
 export interface CompositeRendererOptions {
   theme?: Partial<Theme>;
@@ -282,54 +282,42 @@ export class CompositeRenderer implements IRenderer {
       return { width: 100, height: 40 };
     }
 
-    const cellPaddingX = 12;
-    const cellPaddingY = 8;
-    const cellFontSize = 13;
-    const borderWidth = 1;
-    const tablePadding = 8;
-    const minCellContentWidth = 60;
-    const maxCellWidth = 310;  // 单元格最大宽度
-    const lineHeight = cellFontSize * 1.5;  // 行高
-
-    this.ctx.font = `${cellFontSize}px ${this.theme.fontFamily}`;
+    const lineHeight = TABLE.CELL_FONT_SIZE * 1.5;
+    this.ctx.font = `${TABLE.CELL_FONT_SIZE}px ${this.theme.fontFamily}`;
 
     const colCount = table.rows[0]?.length || 0;
-    const colWidths: number[] = new Array(colCount).fill(minCellContentWidth + cellPaddingX * 2);
+    const colWidths: number[] = new Array(colCount).fill(TABLE.MIN_CELL_WIDTH + TABLE.CELL_PADDING_X * 2);
 
-    // 第一遍：计算每列宽度（受 maxCellWidth 限制）
     for (const row of table.rows) {
       row.forEach((cell, colIndex) => {
         const textWidth = this.ctx.measureText(cell.content || ' ').width;
-        // 单元格宽度 = min(文本宽度 + padding, 最大宽度)
         const cellWidth = Math.min(
-          Math.max(textWidth, minCellContentWidth) + cellPaddingX * 2,
-          maxCellWidth
+          Math.max(textWidth, TABLE.MIN_CELL_WIDTH) + TABLE.CELL_PADDING_X * 2,
+          TABLE.MAX_CELL_WIDTH
         );
         colWidths[colIndex] = Math.max(colWidths[colIndex], cellWidth);
       });
     }
 
-    // 第二遍：计算每行高度
     const rowHeights: number[] = [];
     for (const row of table.rows) {
-      let maxRowHeight = lineHeight + cellPaddingY * 2;  // 最小一行高度
+      let maxRowHeight = lineHeight + TABLE.CELL_PADDING_Y * 2;
       row.forEach((cell, colIndex) => {
-        const cellContentWidth = colWidths[colIndex] - cellPaddingX * 2;  // 可用内容宽度
+        const cellContentWidth = colWidths[colIndex] - TABLE.CELL_PADDING_X * 2;
         const textWidth = this.ctx.measureText(cell.content || ' ').width;
-        // 计算需要多少行
         const lineCount = Math.ceil(textWidth / cellContentWidth) || 1;
-        const cellHeight = lineCount * lineHeight + cellPaddingY * 2;
+        const cellHeight = lineCount * lineHeight + TABLE.CELL_PADDING_Y * 2;
         maxRowHeight = Math.max(maxRowHeight, cellHeight);
       });
       rowHeights.push(maxRowHeight);
     }
 
-    const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + borderWidth * (colCount + 1);
-    const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0) + borderWidth * (table.rows.length + 1);
+    const totalWidth = colWidths.reduce((sum, w) => sum + w, 0) + TABLE.BORDER_WIDTH * (colCount + 1);
+    const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0) + TABLE.BORDER_WIDTH * (table.rows.length + 1);
 
     return {
-      width: totalWidth + tablePadding * 2,
-      height: totalHeight + tablePadding * 2,
+      width: totalWidth + TABLE.MARGIN_LEFT + TABLE.MARGIN_RIGHT + TABLE.NODE_BORDER_WIDTH + TABLE.EXTRA_PADDING,
+      height: totalHeight + TABLE.MARGIN_TOP + TABLE.MARGIN_BOTTOM + TABLE.NODE_BORDER_WIDTH,
     };
   }
 

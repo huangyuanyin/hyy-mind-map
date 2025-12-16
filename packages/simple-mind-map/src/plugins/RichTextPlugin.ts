@@ -135,6 +135,17 @@ export class RichTextPlugin extends Plugin {
       this.context.mindMap.saveHistory('clearAttachment', '清除附件');
       this.context.mindMap.clearNodeAttachment(nodeId);
     });
+
+    // 表格菜单触发回调
+    this.nodeDOMRenderer.setTableMenuTriggerCallback((nodeId, type, index, rect) => {
+      this.context.eventSystem.emit('tableMenuTrigger', { nodeId, type, index, rect });
+    });
+
+    // 尺寸更新回调（当附件节点的实际尺寸与计算尺寸不同时）
+    this.nodeDOMRenderer.setOnSizeUpdateCallback(() => {
+      // 重新渲染 Canvas 以使用更新后的节点尺寸
+      this.context.mindMap.scheduleRender();
+    });
   }
 
   /**
@@ -209,6 +220,15 @@ export class RichTextPlugin extends Plugin {
    */
   getEditingNodeId(): string | null {
     return this.nodeDOMRenderer?.getEditingNodeId() || null;
+  }
+
+  /**
+   * 清除表格高亮
+   */
+  clearTableHighlight(): void {
+    if (this.nodeDOMRenderer) {
+      this.nodeDOMRenderer.clearTableHighlight();
+    }
   }
 
   /**

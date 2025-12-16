@@ -87,6 +87,24 @@ export const MOUSE_BUTTON = {
   RIGHT: 2,
 } as const;
 
+/**
+ * 表格相关常量
+ */
+export const TABLE = {
+  CELL_PADDING_X: 12,
+  CELL_PADDING_Y: 8,
+  CELL_FONT_SIZE: 13,
+  BORDER_WIDTH: 1,
+  MARGIN_TOP: 12,
+  MARGIN_RIGHT: 8,
+  MARGIN_BOTTOM: 8,
+  MARGIN_LEFT: 12,
+  MIN_CELL_WIDTH: 60,
+  MAX_CELL_WIDTH: 310,
+  NODE_BORDER_WIDTH: 4,
+  EXTRA_PADDING: 24,
+} as const;
+
 export * from './themes';
 export { DEFAULT_THEME, COLOR_LIGHT_VARIANTS, getLightColor } from './theme';
 

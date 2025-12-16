@@ -29,6 +29,7 @@ export { LayoutEngine } from './layout';
 
 // 服务层（新增）
 export { NodeService, ViewService, SelectionService } from './services';
+export { TableService } from './services/TableService';
 export type { NodeOperationResult, ViewPort } from './services';
 
 // 工具类（新增）
@@ -95,6 +96,11 @@ export type {
   ViewState,
   Direction,
   TextMeasurement,
+  TableData,
+  TableCell,
+  TableOperationType,
+  CodeBlockData,
+  NodeAttachment,
 } from './types';
 
 export type { EventType, EventData, EventHandler } from './types/events';

@@ -28,6 +28,17 @@ export interface TableData {
 }
 
 /**
+ * 表格操作类型
+ */
+export type TableOperationType =
+  | 'insertRowBefore'
+  | 'insertRowAfter'
+  | 'deleteRow'
+  | 'insertColumnBefore'
+  | 'insertColumnAfter'
+  | 'deleteColumn';
+
+/**
  * 代码块数据
  */
 export interface CodeBlockData {

@@ -34,6 +34,16 @@ export type CodeBlockUpdateCallback = (nodeId: string, codeBlock: CodeBlockData)
 export type ClearAttachmentCallback = (nodeId: string) => void;
 
 /**
+ * 表格菜单触发回调
+ */
+export type TableMenuTriggerCallback = (
+  nodeId: string,
+  type: 'row' | 'column',
+  index: number,
+  rect: DOMRect
+) => void;
+
+/**
  * 节点 DOM 渲染器
  * 负责将节点渲染为 DOM 元素
  */
@@ -66,6 +76,12 @@ export class NodeDOMRenderer {
   private onCodeBlockUpdate: CodeBlockUpdateCallback | null = null;
   // 清除附件回调
   private onClearAttachment: ClearAttachmentCallback | null = null;
+  // 表格菜单触发回调
+  private onTableMenuTrigger: TableMenuTriggerCallback | null = null;
+  // 高亮状态（用于重新渲染后恢复高亮）
+  private highlightState: { nodeId: string; type: 'row' | 'column'; index: number } | null = null;
+  // 当前激活的操作按钮
+  private activeMenuButton: HTMLElement | null = null;
   // 节点数据缓存（用于编辑时访问）
   private nodeDataCache: Map<string, HyyMindMapNode> = new Map();
   // 记录 mousedown 时节点是否已选中（用于判断是否应该进入编辑模式）
@@ -117,6 +133,176 @@ export class NodeDOMRenderer {
    */
   public setClearAttachmentCallback(callback: ClearAttachmentCallback): void {
     this.onClearAttachment = callback;
+  }
+
+  /**
+   * 设置表格菜单触发回调
+   */
+  public setTableMenuTriggerCallback(callback: TableMenuTriggerCallback): void {
+    this.onTableMenuTrigger = callback;
+  }
+
+  // 高亮覆盖层元素
+  private highlightOverlay: HTMLElement | null = null;
+
+  /**
+   * 创建高亮覆盖层
+   */
+  private createHighlightOverlay(
+    table: HTMLElement,
+    rect: { left: number; top: number; width: number; height: number }
+  ): void {
+    this.highlightOverlay = document.createElement('div');
+    this.highlightOverlay.className = 'table-highlight-overlay';
+    this.highlightOverlay.style.cssText = `
+      position: absolute;
+      left: ${rect.left}px;
+      top: ${rect.top}px;
+      width: ${rect.width}px;
+      height: ${rect.height}px;
+      border: 2px solid #5ab5e8;
+      border-radius: 2px;
+      background-color: rgba(232, 244, 252, 0.5);
+      pointer-events: none;
+      z-index: 5;
+      box-sizing: border-box;
+    `;
+    table.style.position = 'relative';
+    table.appendChild(this.highlightOverlay);
+  }
+
+  /**
+   * 高亮表格行
+   */
+  private highlightTableRow(table: HTMLElement, rowIndex: number, nodeId: string): void {
+    this.clearTableHighlight();
+    const rows = table.querySelectorAll('tr');
+    const targetRow = rows[rowIndex] as HTMLElement;
+    if (!targetRow) return;
+
+    const cells = targetRow.querySelectorAll('td');
+    const firstCell = cells[0] as HTMLElement;
+    if (!firstCell) return;
+
+    let top = 0;
+    for (let i = 0; i < rowIndex; i++) {
+      top += (rows[i] as HTMLElement).offsetHeight;
+    }
+
+    let width = 0;
+    cells.forEach((cell) => {
+      width += (cell as HTMLElement).offsetWidth;
+    });
+
+    this.createHighlightOverlay(table, {
+      left: firstCell.offsetLeft,
+      top,
+      width,
+      height: targetRow.offsetHeight,
+    });
+    this.highlightState = { nodeId, type: 'row', index: rowIndex };
+  }
+
+  /**
+   * 高亮表格列
+   */
+  private highlightTableColumn(table: HTMLElement, colIndex: number, nodeId: string): void {
+    this.clearTableHighlight();
+    const rows = table.querySelectorAll('tr');
+    if (rows.length === 0) return;
+
+    const firstRow = rows[0];
+    const firstCell = firstRow.querySelectorAll('td')[colIndex] as HTMLElement;
+    if (!firstCell) return;
+
+    let left = 0;
+    const firstRowCells = firstRow.querySelectorAll('td');
+    for (let i = 0; i < colIndex; i++) {
+      left += (firstRowCells[i] as HTMLElement).offsetWidth;
+    }
+
+    let height = 0;
+    rows.forEach((row) => {
+      height += (row as HTMLElement).offsetHeight;
+    });
+
+    this.createHighlightOverlay(table, {
+      left,
+      top: 0,
+      width: firstCell.offsetWidth,
+      height,
+    });
+    this.highlightState = { nodeId, type: 'column', index: colIndex };
+  }
+
+  /**
+   * 清除表格高亮
+   */
+  public clearTableHighlight(): void {
+    if (this.highlightOverlay?.parentNode) {
+      this.highlightOverlay.parentNode.removeChild(this.highlightOverlay);
+    }
+    this.highlightOverlay = null;
+    this.highlightState = null;
+
+    if (this.activeMenuButton) {
+      this.activeMenuButton.classList.remove('active');
+      this.activeMenuButton.style.display = 'none';
+      this.activeMenuButton = null;
+    }
+  }
+
+  /**
+   * 恢复表格高亮（重新渲染后）
+   */
+  private restoreTableHighlight(nodeId: string): void {
+    if (!this.highlightState || this.highlightState.nodeId !== nodeId) {
+      return;
+    }
+
+    const element = this.nodeElements.get(nodeId);
+    if (!element) return;
+
+    const table = element.querySelector('.node-table') as HTMLElement;
+    if (!table) return;
+
+    const savedState = this.highlightState;
+
+    if (savedState.type === 'row') {
+      this.highlightTableRow(table, savedState.index, nodeId);
+      
+      const rows = table.querySelectorAll('tr');
+      const targetRow = rows[savedState.index];
+      if (targetRow) {
+        const firstCell = targetRow.querySelector('td:first-child') as HTMLElement;
+        if (firstCell) {
+          const btn = firstCell.querySelector('.table-row-trigger-btn') as HTMLElement;
+          if (btn) {
+            btn.style.display = 'flex';
+            this.activeMenuButton = btn;
+            btn.classList.add('active');
+          }
+        }
+      }
+    } else if (savedState.type === 'column') {
+      this.highlightTableColumn(table, savedState.index, nodeId);
+      
+      // 恢复激活按钮的显示和样式
+      const rows = table.querySelectorAll('tr');
+      const headerRow = rows[0];
+      if (headerRow) {
+        const cells = headerRow.querySelectorAll('td');
+        const targetCell = cells[savedState.index] as HTMLElement;
+        if (targetCell) {
+          const btn = targetCell.querySelector('.table-col-trigger-btn') as HTMLElement;
+          if (btn) {
+            btn.style.display = 'flex';
+            this.activeMenuButton = btn;
+            btn.classList.add('active');
+          }
+        }
+      }
+    }
   }
 
   /**
@@ -178,6 +364,91 @@ export class NodeDOMRenderer {
         this.nodeElements.delete(id);
       }
     });
+
+    // 同步有附件节点的实际尺寸
+    // 需要保存 root 引用，以便在回调中使用
+    this.pendingRoot = root;
+    this.lastRenderHadSizeUpdates = false;
+
+    requestAnimationFrame(() => {
+      if (this.pendingRoot) {
+        const hasUpdates = this.syncAttachmentNodeSizes(this.pendingRoot);
+        this.lastRenderHadSizeUpdates = hasUpdates;
+        this.pendingRoot = null;
+        
+        // 如果有尺寸更新，触发回调
+        if (hasUpdates && this.onSizeUpdateCallback) {
+          this.onSizeUpdateCallback();
+        }
+      }
+    });
+  }
+
+  /**
+   * 待处理的根节点（用于异步尺寸同步）
+   */
+  private pendingRoot: HyyMindMapNode | null = null;
+
+  /**
+   * 上次渲染是否有尺寸更新
+   */
+  private lastRenderHadSizeUpdates = false;
+
+  /**
+   * 尺寸更新回调
+   */
+  private onSizeUpdateCallback: (() => void) | null = null;
+
+  /**
+   * 设置尺寸更新回调
+   */
+  public setOnSizeUpdateCallback(callback: () => void): void {
+    this.onSizeUpdateCallback = callback;
+  }
+
+  /**
+   * 检查上次渲染是否有附件节点尺寸更新
+   */
+  public hadSizeUpdates(): boolean {
+    return this.lastRenderHadSizeUpdates;
+  }
+
+  /**
+   * 同步有附件节点的实际 DOM 尺寸到节点数据
+   * @returns 是否有节点尺寸被更新
+   */
+  private syncAttachmentNodeSizes(node: HyyMindMapNode): boolean {
+    let hasUpdates = false;
+    const attachment = node.config?.attachment;
+    
+    if (attachment?.type === 'table' || attachment?.type === 'code') {
+      const element = this.nodeElements.get(node.id);
+      if (element) {
+        // 获取 DOM 元素的实际尺寸（包括边框）
+        const rect = element.getBoundingClientRect();
+        const scale = this.viewState.scale || 1;
+        // 考虑缩放比例，还原到实际尺寸
+        const actualWidth = rect.width / scale;
+        const actualHeight = rect.height / scale;
+        
+        // 更新节点尺寸（只在尺寸不同时更新）
+        if (Math.abs(node.width - actualWidth) > 1 || Math.abs(node.height - actualHeight) > 1) {
+          node.width = actualWidth;
+          node.height = actualHeight;
+          hasUpdates = true;
+        }
+      }
+    }
+
+    for (const child of node.children) {
+      if (this.shouldChildBeVisible(node, child)) {
+        if (this.syncAttachmentNodeSizes(child)) {
+          hasUpdates = true;
+        }
+      }
+    }
+    
+    return hasUpdates;
   }
 
   /**
@@ -379,7 +650,8 @@ export class NodeDOMRenderer {
     if (!isEditing) {
       const contentContainer = element.querySelector('.node-content') as HTMLElement;
       if (contentContainer) {
-        element.style.justifyContent = 'center';
+        // 对于有附件的节点（表格/代码块），使用左对齐，避免居中导致内容超出节点边界
+        element.style.justifyContent = hasAttachment ? 'flex-start' : 'center';
 
         contentContainer.style.display = 'inline-block';
         contentContainer.style.textAlign = 'left';
@@ -463,6 +735,8 @@ export class NodeDOMRenderer {
           // 绑定事件（只在 innerHTML 更新后才需要重新绑定）
           if (attachment?.type === 'table' && attachment.table) {
             this.bindTableCellEvents(contentContainer, node.id);
+            // 恢复表格高亮
+            this.restoreTableHighlight(node.id);
           } else if (attachment?.type === 'code' && attachment.codeBlock) {
             this.bindCodeBlockEvents(contentContainer, node.id);
           }
@@ -838,8 +1112,8 @@ export class NodeDOMRenderer {
       return '<div class="empty-table">空表格</div>';
     }
 
-    // margin: 8px 与 measureTable 中的 tablePadding 一致
-    let html = `<table class="node-table" data-node-id="${nodeId}" style="border-collapse: collapse; font-size: 13px; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden; margin: 8px;">`;
+    // margin: 为操作按钮留出空间（上方和左侧各12px，下方和右侧8px）
+    let html = `<table class="node-table" data-node-id="${nodeId}" style="border-collapse: collapse; font-size: 13px; border: 1px solid #e5e5e5; border-radius: 2px; margin: 12px 8px 8px 12px;">`;
     
     table.rows.forEach((row, rowIndex) => {
       html += '<tr>';
@@ -971,6 +1245,144 @@ export class NodeDOMRenderer {
         }
       });
     });
+
+    // 绑定表格 hover 事件
+    const table = element.querySelector('.node-table') as HTMLElement;
+    if (table) {
+      this.bindTableHoverEvents(table, nodeId);
+    }
+  }
+
+  /**
+   * 绑定表格 hover 事件（行列操作）
+   */
+  private bindTableHoverEvents(table: HTMLElement, nodeId: string): void {
+    const rows = table.querySelectorAll('tr');
+
+    // 为每行的第一个单元格添加行操作按钮
+    rows.forEach((row, rowIndex) => {
+      const rowEl = row as HTMLElement;
+      const firstCell = rowEl.querySelector('td:first-child') as HTMLElement;
+      if (!firstCell) return;
+
+      // 创建行操作触发按钮
+      const rowTriggerBtn = document.createElement('div');
+      rowTriggerBtn.className = 'table-row-trigger-btn';
+      rowTriggerBtn.title = '行操作';
+
+      // 防止选中文本
+      rowTriggerBtn.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+      });
+
+      firstCell.style.position = 'relative';
+      firstCell.appendChild(rowTriggerBtn);
+
+      // hover第一个单元格时显示按钮
+      firstCell.addEventListener('mouseenter', () => {
+        if (this.editingCellNodeId) return;
+        rowTriggerBtn.style.display = 'flex';
+      });
+
+      firstCell.addEventListener('mouseleave', () => {
+        setTimeout(() => {
+          if (this.activeMenuButton === rowTriggerBtn) {
+            return;
+          }
+          if (!rowTriggerBtn.matches(':hover')) {
+            rowTriggerBtn.style.display = 'none';
+          }
+        }, 150);
+      });
+
+      rowTriggerBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+
+        // 让按钮失去焦点，移除光标
+        rowTriggerBtn.blur();
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur();
+        }
+
+        const rect = rowTriggerBtn.getBoundingClientRect();
+
+        // 先高亮当前行
+        this.highlightTableRow(table, rowIndex, nodeId);
+        
+        // 然后设置当前按钮为激活状态
+        this.activeMenuButton = rowTriggerBtn;
+        rowTriggerBtn.style.display = 'flex';
+        rowTriggerBtn.classList.add('active');
+
+        if (this.onTableMenuTrigger) {
+          this.onTableMenuTrigger(nodeId, 'row', rowIndex, rect);
+        }
+      });
+    });
+
+    // 为第一行的每个单元格添加列操作按钮
+    const headerRow = rows[0];
+    if (headerRow) {
+      const cells = headerRow.querySelectorAll('td');
+      cells.forEach((cell, colIndex) => {
+        const cellEl = cell as HTMLElement;
+
+        // 创建列操作触发按钮
+        const colTriggerBtn = document.createElement('div');
+        colTriggerBtn.className = 'table-col-trigger-btn';
+        colTriggerBtn.title = '列操作';
+
+        // 防止选中文本
+        colTriggerBtn.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+        });
+
+        cellEl.style.position = 'relative';
+        cellEl.appendChild(colTriggerBtn);
+
+        cellEl.addEventListener('mouseenter', () => {
+          if (this.editingCellNodeId) return;
+          colTriggerBtn.style.display = 'flex';
+        });
+
+        cellEl.addEventListener('mouseleave', () => {
+          setTimeout(() => {
+            if (this.activeMenuButton === colTriggerBtn) {
+              return;
+            }
+            if (!colTriggerBtn.matches(':hover')) {
+              colTriggerBtn.style.display = 'none';
+            }
+          }, 150);
+        });
+
+        colTriggerBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          e.preventDefault();
+
+          // 让按钮失去焦点，移除光标
+          colTriggerBtn.blur();
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+
+          const rect = colTriggerBtn.getBoundingClientRect();
+
+          // 先高亮当前列
+          this.highlightTableColumn(table, colIndex, nodeId);
+          
+          // 然后设置当前按钮为激活状态
+          this.activeMenuButton = colTriggerBtn;
+          colTriggerBtn.style.display = 'flex';
+          colTriggerBtn.classList.add('active');
+
+          if (this.onTableMenuTrigger) {
+            this.onTableMenuTrigger(nodeId, 'column', colIndex, rect);
+          }
+        });
+      });
+    }
   }
 
   /**

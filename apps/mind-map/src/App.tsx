@@ -6,8 +6,11 @@ import {
   useContextMenu,
   useNodeOperations,
   useHyperlinkManager,
+  useTableMenuManager,
+  useTableOperations,
 } from './hooks';
 import type { NodeStyle } from './hooks';
+import type { TableOperationType } from 'hyy-mind-map';
 
 import { Toolbar } from './components/Toolbar';
 import { ZoomControl } from './components/ZoomControl';
@@ -16,6 +19,7 @@ import { IconSelector } from './components/IconSelector';
 import { NodeFormatToolbar } from './components/NodeFormatToolbar';
 import { HyperlinkPopover } from './components/HyperlinkPopover';
 import { HyperlinkPreview } from './components/HyperlinkPreview';
+import { TableMenu } from './components/TableMenu';
 import './App.css';
 
 // 配置 Message 组件位置
@@ -58,6 +62,24 @@ function App() {
 
   // 超链接管理
   const hyperlink = useHyperlinkManager({ mindMapRef, activeNodeId });
+
+  // 表格菜单管理
+  const tableMenu = useTableMenuManager(mindMapRef);
+  const { executeTableOperation } = useTableOperations(mindMapRef);
+
+  // 表格操作处理
+  const handleTableOperation = useCallback(
+    (operation: TableOperationType) => {
+      if (!tableMenu.menuState.nodeId) return;
+      executeTableOperation(
+        tableMenu.menuState.nodeId,
+        operation,
+        tableMenu.menuState.index
+      );
+      tableMenu.closeMenu(true);
+    },
+    [tableMenu, executeTableOperation]
+  );
 
   // 处理节点样式变更
   const handleNodeStyleChange = useCallback((nodeId: string, style: NodeStyle) => {
@@ -187,6 +209,34 @@ function App() {
             hyperlink.closePreview();
           }}
         />
+
+        {/* 表格菜单 */}
+        {tableMenu.menuState.visible && tableMenu.menuState.type && (
+          <TableMenu
+            visible={tableMenu.menuState.visible}
+            type={tableMenu.menuState.type}
+            position={tableMenu.menuState.position}
+            canDelete={tableMenu.menuState.canDelete}
+            onInsertBefore={() => {
+              const op = tableMenu.menuState.type === 'row' ? 'insertRowBefore' : 'insertColumnBefore';
+              handleTableOperation(op);
+            }}
+            onInsertAfter={() => {
+              const op = tableMenu.menuState.type === 'row' ? 'insertRowAfter' : 'insertColumnAfter';
+              handleTableOperation(op);
+            }}
+            onDelete={() => {
+              const op = tableMenu.menuState.type === 'row' ? 'deleteRow' : 'deleteColumn';
+              handleTableOperation(op);
+            }}
+            onMouseEnter={() => {
+              tableMenu.isHoveringMenuRef.current = true;
+            }}
+            onMouseLeave={() => {
+              tableMenu.isHoveringMenuRef.current = false;
+            }}
+          />
+        )}
 
         {/* 样式面板 */}
         {iconSelectorVisible && (

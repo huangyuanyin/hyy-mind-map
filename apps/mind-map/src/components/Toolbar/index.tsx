@@ -1,6 +1,9 @@
 import React from 'react';
 import { ToolbarButton } from './ToolbarButton';
-import { DeleteIcon, SiblingIcon, ChildIcon, StyleIcon } from './icons';
+import DeleteIcon from '../../assets/icons/ui/toolbar-delete.svg?react';
+import SiblingIcon from '../../assets/icons/ui/toolbar-sibling.svg?react';
+import ChildIcon from '../../assets/icons/ui/toolbar-child.svg?react';
+import StyleIcon from '../../assets/icons/ui/toolbar-style.svg?react';
 import './styles.css';
 
 interface ToolbarProps {

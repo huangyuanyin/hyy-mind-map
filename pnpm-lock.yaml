@@ -52,6 +52,9 @@ importers:
       hyy-mind-map:
         specifier: workspace:*
         version: link:../../packages/simple-mind-map
+      iconoir-react:
+        specifier: ^7.11.0
+        version: 7.11.0(react@18.3.1)
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -906,6 +909,11 @@ packages:
 
   html-entities@2.6.0:
     resolution: {integrity: sha512-kig+rMn/QOVRvr7c86gQ8lWXq+Hkv6CbAH1hLu+RG338StTpE8Z0b44SDVaqVu7HGKf27frdmUYEs9hTUX/cLQ==}
+
+  iconoir-react@7.11.0:
+    resolution: {integrity: sha512-uvTKtnHYwbbTsmQ6HCcliYd50WK0GbjP497RwdISxKzfS01x4cK1Mn/F2mT/t2roSaJQ0I+KnHxMcyvmNMXWsQ==}
+    peerDependencies:
+      react: 18 || 19
 
   import-fresh@3.3.1:
     resolution: {integrity: sha512-TR3KfrTZTYLPB6jUjfx6MF9WcWrHL9su5TObK4ZkYgBdWKPOFoSoQIdEuTuR82pmtxH2spWG9h6etwfr1pLBqQ==}
@@ -2121,6 +2129,10 @@ snapshots:
   highlight.js@11.11.1: {}
 
   html-entities@2.6.0: {}
+
+  iconoir-react@7.11.0(react@18.3.1):
+    dependencies:
+      react: 18.3.1
 
   import-fresh@3.3.1:
     dependencies:

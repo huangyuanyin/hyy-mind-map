@@ -11,6 +11,7 @@ import { ShortcutManager, ShortcutContext, createDefaultShortcuts } from './shor
 import { NodeService } from './services/NodeService';
 import { ViewService } from './services/ViewService';
 import { SelectionService } from './services/SelectionService';
+import { TableService } from './services/TableService';
 import { PerformanceUtils } from './utils';
 import { PluginManager, type PluginClass, type PluginContext, PluginLifecycle, type Plugin } from './plugins';
 import type { RichTextPlugin } from './plugins/RichTextPlugin';
@@ -82,6 +83,7 @@ export class MindMap {
   public nodeService: NodeService;
   public viewService: ViewService;
   public selectionService: SelectionService;
+  public tableService: TableService;
 
   // 其他模块
   private historyManager: HistoryManager;
@@ -147,6 +149,8 @@ export class MindMap {
       this.stateManager,
       this.nodeManager
     );
+
+    this.tableService = new TableService();
 
     // 8. 初始化快捷键
     if (options.enableShortcuts !== false) {
@@ -655,6 +659,13 @@ export class MindMap {
    */
   getNodeManager(): NodeManager {
     return this.nodeManager;
+  }
+
+  /**
+   * 获取事件系统
+   */
+  getEventSystem(): EventSystem {
+    return this.eventSystem;
   }
 
   /**

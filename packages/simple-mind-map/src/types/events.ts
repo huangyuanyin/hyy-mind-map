@@ -18,7 +18,8 @@ export type EventType =
   | 'zoom'
   | 'render_needed'
   | 'selection_changed'
-  | 'scale_change';
+  | 'scale_change'
+  | 'tableMenuTrigger';
 
 /**
  * 事件数据
@@ -37,6 +38,10 @@ export interface EventData {
   dragPreview?: DragPreviewState;
   dropTarget?: HyyMindMapNode;
   dropPosition?: DropPosition;
+  nodeId?: string;
+  type?: 'row' | 'column';
+  index?: number;
+  rect?: DOMRect;
 }
 
 /**

@@ -2,7 +2,6 @@ import React from 'react';
 import { Menu } from '@arco-design/web-react';
 
 interface MenuItemProps {
-  key: string;
   onClick: () => void;
   icon: React.ReactNode;
   label: string;
@@ -21,6 +20,7 @@ export const MenuItem: React.FC<MenuItemProps> = ({
 }) => {
   return (
     <Menu.Item
+      key={label}
       onClick={onClick}
       disabled={disabled}
       style={disabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
@@ -43,13 +43,11 @@ export const MenuItem: React.FC<MenuItemProps> = ({
 };
 
 export const MenuDivider: React.FC = () => (
-  <Menu.Item
+  <div
     style={{
       height: '1px',
-      background: '#f0f0f0',
-      margin: '4px 0',
-      padding: 0,
+      background: '#e5e5e5',
+      margin: '4px 12px',
     }}
   />
 );
-
