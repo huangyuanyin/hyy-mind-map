@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Message } from '@arco-design/web-react';
 import '@arco-design/web-react/dist/css/arco.css';
 import {
@@ -12,6 +12,10 @@ import {
 } from './hooks';
 import type { NodeStyle } from './hooks';
 import type { TableOperationType, ImageData } from 'hyy-mind-map';
+
+import { PhotoSlider } from 'react-photo-view';
+import 'react-photo-view/dist/react-photo-view.css';
+import { ZoomIn, ZoomOut, Undo, Redo, Download } from 'iconoir-react';
 
 import { Toolbar } from './components/Toolbar';
 import { ZoomControl } from './components/ZoomControl';
@@ -35,6 +39,11 @@ function App() {
   const [imageModalVisible, setImageModalVisible] = useState<boolean>(false);
   // 节点样式状态 - 仅用于 useNodeOperations 同步更新
   const [, setLocalNodeStyle] = useState<NodeStyle>({});
+  // 图片预览状态
+  const [imagePreviewState, setImagePreviewState] = useState<{
+    visible: boolean;
+    imageData: ImageData | null;
+  }>({ visible: false, imageData: null });
 
   // 思维导图核心状态
   const {
@@ -153,6 +162,30 @@ function App() {
       handleImageUpload(imageData);
     }
   });
+
+  useEffect(() => {
+    if (!mindMapRef.current) return;
+
+    const eventSystem = mindMapRef.current.getEventSystem();
+    const handleImagePreview = (data: { imageData?: ImageData }) => {
+      if (data.imageData) {
+        setImagePreviewState({
+          visible: true,
+          imageData: data.imageData,
+        });
+      }
+    };
+
+    eventSystem.on('imagePreview', handleImagePreview);
+
+    return () => {
+      eventSystem.off('imagePreview', handleImagePreview);
+    };
+  }, []);
+
+  const handleCloseImagePreview = useCallback(() => {
+    setImagePreviewState({ visible: false, imageData: null });
+  }, []);
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
@@ -295,6 +328,38 @@ function App() {
             setImageModalVisible(false);
           }}
           onUpload={handleImageUpload}
+        />
+
+        {/* 图片预览弹窗 */}
+        <PhotoSlider
+          images={imagePreviewState.imageData ? [{ src: imagePreviewState.imageData.base64, key: 'preview' }] : []}
+          visible={imagePreviewState.visible}
+          onClose={handleCloseImagePreview}
+          index={0}
+          onIndexChange={() => {}}
+          toolbarRender={({ onScale, scale, rotate, onRotate }) => {
+            const iconStyle = { cursor: 'pointer', width: 22, height: 22 };
+            const dividerStyle = { width: 1, height: 20, background: 'rgba(255,255,255,0.3)' };
+            const handleDownload = () => {
+              if (!imagePreviewState.imageData?.base64) return;
+              const link = document.createElement('a');
+              link.href = imagePreviewState.imageData.base64;
+              link.download = imagePreviewState.imageData.fileName || 'image.png';
+              link.click();
+            };
+            return (
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <ZoomOut onClick={() => onScale(scale - 0.1)} style={{ ...iconStyle, opacity: scale <= 1 ? 0.3 : 1 }} />
+                <span style={{ minWidth: 48, textAlign: 'center', fontSize: 14 }}>{Math.round(scale * 100)}%</span>
+                <ZoomIn onClick={() => onScale(scale + 0.1)} style={{ ...iconStyle, opacity: scale >= 6 ? 0.3 : 1 }} />
+                <div style={dividerStyle} />
+                <Undo onClick={() => onRotate(rotate - 90)} style={iconStyle} />
+                <Redo onClick={() => onRotate(rotate + 90)} style={iconStyle} />
+                <div style={dividerStyle} />
+                <Download onClick={handleDownload} style={iconStyle} />
+              </div>
+            );
+          }}
         />
       </div>
     </div>

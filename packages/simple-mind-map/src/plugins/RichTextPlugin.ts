@@ -157,6 +157,11 @@ export class RichTextPlugin extends Plugin {
       this.context.mindMap.scheduleRender();
     });
 
+    // 图片预览回调
+    this.nodeDOMRenderer.setImagePreviewCallback((imageData) => {
+      this.context.eventSystem.emit('imagePreview', { imageData });
+    });
+
     // 尺寸更新回调（当附件节点的实际尺寸与计算尺寸不同时）
     this.nodeDOMRenderer.setOnSizeUpdateCallback(() => {
       // 重新渲染 Canvas 以使用更新后的节点尺寸

@@ -2,7 +2,7 @@ import type { HyyMindMapNode } from '../core/HyyMindMapNode';
 import type { Theme, ViewState, RichContent, TableData, CodeBlockData } from '../types';
 import { DEFAULT_THEME } from '../constants/theme';
 import { LAYOUT } from '../constants';
-import { ImageResizeHandler, type ImageResizeCallback } from './ImageResizeHandler';
+import { ImageResizeHandler, type ImageResizeCallback, type ImagePreviewCallback } from './ImageResizeHandler';
 
 /**
  * 编辑完成回调
@@ -196,6 +196,13 @@ export class NodeDOMRenderer {
    */
   public setImageSelectChangeCallback(callback: ImageSelectChangeCallback): void {
     this.onImageSelectChange = callback;
+  }
+
+  /**
+   * 设置图片预览回调
+   */
+  public setImagePreviewCallback(callback: ImagePreviewCallback): void {
+    this.imageResizeHandler.setImagePreviewCallback(callback);
   }
 
   // 高亮覆盖层元素

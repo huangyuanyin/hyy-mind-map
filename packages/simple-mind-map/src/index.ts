@@ -21,7 +21,7 @@ export { Renderer } from './renderer/Renderer';
 export { NodeDOMRenderer } from './renderer/NodeDOMRenderer';
 export type { EditCompleteCallback, NodeClickCallback, NodeMouseDownCallback, ClearAttachmentCallback } from './renderer/NodeDOMRenderer';
 export { ImageResizeHandler } from './renderer/ImageResizeHandler';
-export type { ImageResizeCallback, ImageSelectCallback, ImageResizeHandlerConfig, ResizeHandlePosition } from './renderer/ImageResizeHandler';
+export type { ImageResizeCallback, ImageSelectCallback, ImagePreviewCallback, ImageResizeHandlerConfig, ResizeHandlePosition } from './renderer/ImageResizeHandler';
 
 // 事件系统
 export { EventSystem } from './events/EventSystem';

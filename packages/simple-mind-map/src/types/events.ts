@@ -1,5 +1,5 @@
 import type { HyyMindMapNode } from '../core/HyyMindMapNode';
-import type { Rect, DragPreviewState, DropPosition } from './index';
+import type { Rect, DragPreviewState, DropPosition, ImageData } from './index';
 
 /**
  * 事件类型
@@ -19,7 +19,8 @@ export type EventType =
   | 'render_needed'
   | 'selection_changed'
   | 'scale_change'
-  | 'tableMenuTrigger';
+  | 'tableMenuTrigger'
+  | 'imagePreview';
 
 /**
  * 事件数据
@@ -42,6 +43,7 @@ export interface EventData {
   type?: 'row' | 'column';
   index?: number;
   rect?: DOMRect;
+  imageData?: ImageData;
 }
 
 /**

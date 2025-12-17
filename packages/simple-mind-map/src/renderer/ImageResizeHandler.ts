@@ -31,6 +31,11 @@ interface ImageResizeState {
 export type ImageSelectCallback = (nodeId: string | null) => void;
 
 /**
+ * 图片双击查看原图回调
+ */
+export type ImagePreviewCallback = (imageData: ImageData) => void;
+
+/**
  * 图片调整处理器配置
  */
 export interface ImageResizeHandlerConfig {
@@ -42,6 +47,8 @@ export interface ImageResizeHandlerConfig {
   onImageResize?: ImageResizeCallback;
   /** 图片选中状态变化回调 */
   onImageSelect?: ImageSelectCallback;
+  /** 图片双击查看原图回调 */
+  onImagePreview?: ImagePreviewCallback;
 }
 
 /**
@@ -77,6 +84,13 @@ export class ImageResizeHandler {
   }
 
   /**
+   * 设置图片预览回调
+   */
+  public setImagePreviewCallback(callback: ImagePreviewCallback): void {
+    this.config.onImagePreview = callback;
+  }
+
+  /**
    * 绑定图片点击事件
    */
   public bindImageClickEvents(
@@ -100,6 +114,20 @@ export class ImageResizeHandler {
       }
 
       this.selectImage(wrapper, nodeId, imageData);
+    });
+
+    // 双击查看原图
+    wrapper.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      if ((e.target as HTMLElement).classList.contains('image-resize-handle')) {
+        return;
+      }
+
+      if (this.config.onImagePreview) {
+        this.config.onImagePreview(imageData);
+      }
     });
 
     // 只有当节点已选中时才阻止 mousedown 事件冒泡
