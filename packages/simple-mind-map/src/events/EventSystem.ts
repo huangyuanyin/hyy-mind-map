@@ -53,6 +53,9 @@ export class EventSystem {
   // 最后选中的节点（用于范围选择）
   private lastSelectedNode: HyyMindMapNode | null = null;
 
+  // 交互禁用状态
+  private interactionDisabled: boolean = false;
+
   // 变换状态（用于坐标转换）
   private viewState: ViewState = {
     scale: 1,
@@ -453,9 +456,33 @@ export class EventSystem {
   }
 
   /**
+   * 禁用交互（弹窗打开时调用）
+   */
+  public disableInteraction(): void {
+    this.interactionDisabled = true;
+    // 清除当前 hover 状态
+    if (this.hoverNode) {
+      this.hoverNode.isHover = false;
+      this.hoverNode = null;
+      this.emit('render_needed');
+    }
+  }
+
+  /**
+   * 启用交互（弹窗关闭时调用）
+   */
+  public enableInteraction(): void {
+    this.interactionDisabled = false;
+  }
+
+  /**
    * 处理 hover 效果
    */
   private handleHover(world: Point): void {
+    if (this.interactionDisabled) {
+      return;
+    }
+
     const node = this.findNodeAt(world.x, world.y);
     if (node !== this.hoverNode) {
       if (this.hoverNode) {

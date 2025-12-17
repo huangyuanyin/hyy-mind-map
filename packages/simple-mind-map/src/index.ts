@@ -20,6 +20,8 @@ export { CompositeRenderer } from './renderer/CompositeRenderer';
 export { Renderer } from './renderer/Renderer';
 export { NodeDOMRenderer } from './renderer/NodeDOMRenderer';
 export type { EditCompleteCallback, NodeClickCallback, NodeMouseDownCallback, ClearAttachmentCallback } from './renderer/NodeDOMRenderer';
+export { ImageResizeHandler } from './renderer/ImageResizeHandler';
+export type { ImageResizeCallback, ImageResizeHandlerConfig, ResizeHandlePosition } from './renderer/ImageResizeHandler';
 
 // 事件系统
 export { EventSystem } from './events/EventSystem';
@@ -101,6 +103,7 @@ export type {
   TableOperationType,
   CodeBlockData,
   NodeAttachment,
+  ImageData,
 } from './types';
 
 export type { EventType, EventData, EventHandler } from './types/events';

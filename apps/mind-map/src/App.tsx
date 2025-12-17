@@ -8,9 +8,10 @@ import {
   useHyperlinkManager,
   useTableMenuManager,
   useTableOperations,
+  useImagePaste,
 } from './hooks';
 import type { NodeStyle } from './hooks';
-import type { TableOperationType } from 'hyy-mind-map';
+import type { TableOperationType, ImageData } from 'hyy-mind-map';
 
 import { Toolbar } from './components/Toolbar';
 import { ZoomControl } from './components/ZoomControl';
@@ -20,6 +21,7 @@ import { NodeFormatToolbar } from './components/NodeFormatToolbar';
 import { HyperlinkPopover } from './components/HyperlinkPopover';
 import { HyperlinkPreview } from './components/HyperlinkPreview';
 import { TableMenu } from './components/TableMenu';
+import { ImageUploadModal } from './components/ImageUploadModal';
 import './App.css';
 
 // 配置 Message 组件位置
@@ -30,6 +32,7 @@ Message.config({
 
 function App() {
   const [iconSelectorVisible, setIconSelectorVisible] = useState<boolean>(false);
+  const [imageModalVisible, setImageModalVisible] = useState<boolean>(false);
   // 节点样式状态 - 仅用于 useNodeOperations 同步更新
   const [, setLocalNodeStyle] = useState<NodeStyle>({});
 
@@ -118,6 +121,39 @@ function App() {
     return node?.config?.icons || {};
   }, [mindMapRef, activeNodeId]);
 
+  const handleOpenImageUpload = useCallback(() => {
+    if (!hasSelectedNode) {
+      Message.warning('请先选择一个节点');
+      return;
+    }
+    mindMapRef.current?.disableInteraction();
+    setImageModalVisible(true);
+  }, [hasSelectedNode]);
+
+  const handleImageUpload = useCallback(
+    (imageData: ImageData) => {
+      if (!mindMapRef.current || !activeNodeId) return;
+
+      const node = mindMapRef.current.getNodeManager().findNode(activeNodeId);
+      if (!node) return;
+
+      mindMapRef.current.updateNodeConfig(activeNodeId, {
+        ...node.config,
+        image: imageData,
+      });
+
+      Message.success('图片已添加到节点');
+    },
+    [mindMapRef, activeNodeId]
+  );
+
+  // 启用粘贴图片功能
+  useImagePaste(hasSelectedNode, (imageData) => {
+    if (activeNodeId) {
+      handleImageUpload(imageData);
+    }
+  });
+
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       {/* 画布区域 */}
@@ -139,6 +175,7 @@ function App() {
           onAddSibling={nodeOps.handleAddSibling}
           onAddChild={nodeOps.handleAddChild}
           onOpenStyle={handleOpenStylePanel}
+          onOpenImageUpload={handleOpenImageUpload}
         />
 
         {/* 缩放控制面板 */}
@@ -249,6 +286,16 @@ function App() {
             hasSelectedNode={hasSelectedNode}
           />
         )}
+
+        {/* 图片上传弹窗 */}
+        <ImageUploadModal
+          visible={imageModalVisible}
+          onClose={() => {
+            mindMapRef.current?.enableInteraction();
+            setImageModalVisible(false);
+          }}
+          onUpload={handleImageUpload}
+        />
       </div>
     </div>
   );

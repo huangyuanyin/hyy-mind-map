@@ -675,6 +675,20 @@ export class MindMap {
     return this.shortcutManager;
   }
 
+  /**
+   * 禁用交互（弹窗打开时调用，禁止 hover 等交互）
+   */
+  disableInteraction(): void {
+    this.eventSystem.disableInteraction();
+  }
+
+  /**
+   * 启用交互（弹窗关闭时调用）
+   */
+  enableInteraction(): void {
+    this.eventSystem.enableInteraction();
+  }
+
   // ==================== 便捷代理方法 (为命令层提供兼容性) ====================
 
   /**
@@ -770,6 +784,23 @@ export class MindMap {
       return result.node;
     }
     return null;
+  }
+
+  /**
+   * 更新节点配置
+   */
+  updateNodeConfig(nodeId: string, config: Partial<import('./types').NodeConfig>): void {
+    const node = this.nodeManager.findNode(nodeId);
+    if (!node) return;
+
+    this.saveHistory('updateNodeConfig', '更新节点配置');
+
+    node.config = {
+      ...node.config,
+      ...config,
+    };
+
+    this.relayout();
   }
 
   /**

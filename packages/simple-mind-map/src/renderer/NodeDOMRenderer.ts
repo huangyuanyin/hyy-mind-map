@@ -2,6 +2,7 @@ import type { HyyMindMapNode } from '../core/HyyMindMapNode';
 import type { Theme, ViewState, RichContent, TableData, CodeBlockData } from '../types';
 import { DEFAULT_THEME } from '../constants/theme';
 import { LAYOUT } from '../constants';
+import { ImageResizeHandler, type ImageResizeCallback } from './ImageResizeHandler';
 
 /**
  * 编辑完成回调
@@ -86,11 +87,19 @@ export class NodeDOMRenderer {
   private nodeDataCache: Map<string, HyyMindMapNode> = new Map();
   // 记录 mousedown 时节点是否已选中（用于判断是否应该进入编辑模式）
   private wasNodeSelectedOnMouseDown: Map<string, boolean> = new Map();
+  // 图片调整处理器
+  private imageResizeHandler: ImageResizeHandler;
 
   constructor(container: HTMLElement, theme?: Partial<Theme>) {
     this.container = container;
     this.theme = { ...DEFAULT_THEME, ...theme };
     this.nodesContainer = this.createNodesContainer();
+
+    // 初始化图片调整处理器
+    this.imageResizeHandler = new ImageResizeHandler({
+      getViewState: () => this.viewState,
+      getNodeDataCache: () => this.nodeDataCache,
+    });
   }
 
   /**
@@ -140,6 +149,13 @@ export class NodeDOMRenderer {
    */
   public setTableMenuTriggerCallback(callback: TableMenuTriggerCallback): void {
     this.onTableMenuTrigger = callback;
+  }
+
+  /**
+   * 设置图片尺寸更新回调
+   */
+  public setImageResizeCallback(callback: ImageResizeCallback): void {
+    this.imageResizeHandler.setImageResizeCallback(callback);
   }
 
   // 高亮覆盖层元素
@@ -319,6 +335,7 @@ export class NodeDOMRenderer {
       height: 100%;
       pointer-events: none;
       overflow: visible;
+      z-index: 1;
     `;
     this.container.appendChild(nodesContainer);
     return nodesContainer;
@@ -524,11 +541,23 @@ export class NodeDOMRenderer {
       font-family: ${this.theme.fontFamily};
       color: ${this.theme.nodeTextColor};
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
       padding: ${this.theme.padding}px;
       transition: box-shadow 0.2s, border-color 0.2s;
     `;
+
+    // 创建图片容器（在内容上方，不可编辑）
+    const imageContainer = document.createElement('div');
+    imageContainer.className = 'node-image-container';
+    imageContainer.contentEditable = 'false';
+    imageContainer.style.cssText = `
+      text-align: center;
+      user-select: none;
+      pointer-events: auto;
+    `;
+    element.appendChild(imageContainer);
 
     // 创建内容容器
     const contentContainer = document.createElement('div');
@@ -648,7 +677,85 @@ export class NodeDOMRenderer {
     
     // 更新内容（只在非编辑状态下）
     if (!isEditing) {
+      let imageContainer = element.querySelector('.node-image-container') as HTMLElement;
       const contentContainer = element.querySelector('.node-content') as HTMLElement;
+      
+      // 如果图片容器不存在，创建它（兼容旧的节点元素）
+      if (!imageContainer && contentContainer) {
+        imageContainer = document.createElement('div');
+        imageContainer.className = 'node-image-container';
+        imageContainer.contentEditable = 'false';
+        imageContainer.style.cssText = `
+          text-align: center;
+          user-select: none;
+          pointer-events: auto;
+        `;
+        // 插入到内容容器之前
+        element.insertBefore(imageContainer, contentContainer);
+      }
+      
+      // 更新图片容器（图片在内容上方，单独区域，不可编辑）
+      if (imageContainer) {
+        const imageData = node.config?.image;
+        if (imageData) {
+          const displayWidth = imageData.displayWidth || 200;
+          // 检查是否需要更新图片
+          const existingImg = imageContainer.querySelector('.node-image') as HTMLImageElement;
+          const needsUpdate = !existingImg || 
+            existingImg.src !== imageData.base64 || 
+            parseInt(existingImg.style.width) !== displayWidth;
+          
+          if (needsUpdate) {
+            // 清空容器并重新创建图片
+            imageContainer.innerHTML = '';
+            
+            // 创建图片包装器
+            const imageWrapper = document.createElement('div');
+            imageWrapper.className = 'node-image-wrapper';
+            imageWrapper.style.cssText = `
+              position: relative;
+              display: inline-block;
+              margin: 0 auto 8px auto;
+            `;
+            
+            // 创建图片元素
+            const img = document.createElement('img');
+            img.src = imageData.base64;
+            img.className = 'node-image';
+            img.style.cssText = `
+              width: ${displayWidth}px;
+              height: auto;
+              border-radius: 4px;
+              display: block;
+            `;
+            
+            imageWrapper.appendChild(img);
+            imageContainer.appendChild(imageWrapper);
+            
+            this.imageResizeHandler.bindImageClickEvents(imageWrapper, node.id, imageData);
+          } else if (existingImg) {
+            // 只更新宽度
+            existingImg.style.width = `${displayWidth}px`;
+          }
+          
+          imageContainer.style.display = 'block';
+          
+          // 如果当前图片被选中，确保手柄存在
+          if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
+            const wrapper = imageContainer.querySelector('.node-image-wrapper') as HTMLElement;
+            if (wrapper && !wrapper.querySelector('.image-resize-handle')) {
+              this.imageResizeHandler.showImageResizeHandles(wrapper, node.id, imageData);
+            }
+          }
+        } else {
+          imageContainer.innerHTML = '';
+          imageContainer.style.display = 'none';
+          if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
+            this.imageResizeHandler.clearImageSelection();
+          }
+        }
+      }
+      
       if (contentContainer) {
         // 对于有附件的节点（表格/代码块），使用左对齐，避免居中导致内容超出节点边界
         element.style.justifyContent = hasAttachment ? 'flex-start' : 'center';
@@ -672,24 +779,24 @@ export class NodeDOMRenderer {
         const ICON_SIZE = 20;
         const ICON_GAP = 4;
         const ICON_TEXT_PADDING = 6;
-        
+
         let iconsHtml = '';
         const icons = node.config?.icons;
         const singleIcon = node.config?.icon;
-        
+
         if (icons && Object.keys(icons).length > 0) {
           // 多个图标
           const iconUrls = Object.values(icons);
           iconsHtml = `<span class="node-icons" style="display: inline-flex; align-items: center; margin-right: ${ICON_TEXT_PADDING}px; flex-shrink: 0;">` +
-            iconUrls.map((iconUrl, index) => 
+            iconUrls.map((iconUrl, index) =>
               `<img src="${iconUrl}" style="width: ${ICON_SIZE}px; height: ${ICON_SIZE}px; ${index < iconUrls.length - 1 ? `margin-right: ${ICON_GAP}px;` : ''}" />`
             ).join('') + '</span>';
         } else if (singleIcon) {
           // 单个图标
           iconsHtml = `<span class="node-icons" style="display: inline-flex; align-items: center; margin-right: ${ICON_TEXT_PADDING}px; flex-shrink: 0;"><img src="${singleIcon}" style="width: ${ICON_SIZE}px; height: ${ICON_SIZE}px;" /></span>`;
         }
-        
-        // 计算新的 HTML 内容
+
+        // 计算新的 HTML 内容（不包含图片，图片在单独的容器中）
         let newHtml = '';
 
         if (attachment?.type === 'table' && attachment.table) {
@@ -716,7 +823,8 @@ export class NodeDOMRenderer {
             newHtml = iconsHtml;
           } else {
             // 显示占位符
-            newHtml = '输入文字';
+            const hasImage = !!node.config?.image;
+            newHtml = hasImage ? '' : '输入文字';
           }
         }
 
@@ -809,16 +917,26 @@ export class NodeDOMRenderer {
       element.style.border = `2px solid ${customBorderColor || this.theme.nodeBorderColor}`;
       element.style.boxShadow = 'none';
       element.dataset.selected = 'false';
+      // 节点未选中时，清除该节点的图片选中状态
+      if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
+        this.imageResizeHandler.clearImageSelection();
+      }
     } else if (customBorderColor) {
       // 有自定义边框色时显示边框
       element.style.border = `2px solid ${customBorderColor}`;
       element.style.boxShadow = 'none';
       element.dataset.selected = 'false';
+      if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
+        this.imageResizeHandler.clearImageSelection();
+      }
     } else {
       // 默认状态：透明边框，保持布局稳定
       element.style.border = '2px solid transparent';
       element.style.boxShadow = 'none';
       element.dataset.selected = 'false';
+      if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
+        this.imageResizeHandler.clearImageSelection();
+      }
     }
   }
 
@@ -1548,6 +1666,13 @@ export class NodeDOMRenderer {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  /**
+   * 清除图片选中状态
+   */
+  public clearImageSelection(): void {
+    this.imageResizeHandler.clearImageSelection();
   }
 }
 

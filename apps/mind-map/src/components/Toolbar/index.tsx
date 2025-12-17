@@ -4,6 +4,7 @@ import DeleteIcon from '../../assets/icons/ui/toolbar-delete.svg?react';
 import SiblingIcon from '../../assets/icons/ui/toolbar-sibling.svg?react';
 import ChildIcon from '../../assets/icons/ui/toolbar-child.svg?react';
 import StyleIcon from '../../assets/icons/ui/toolbar-style.svg?react';
+import ImageIcon from '../../assets/icons/ui/toolbar-image.svg?react';
 import './styles.css';
 
 interface ToolbarProps {
@@ -19,6 +20,8 @@ interface ToolbarProps {
   onAddChild: () => void;
   /** 打开样式面板 */
   onOpenStyle: () => void;
+  /** 打开图片上传 */
+  onOpenImageUpload: () => void;
 }
 
 /**
@@ -31,6 +34,7 @@ export const Toolbar: React.FC<ToolbarProps> = ({
   onAddSibling,
   onAddChild,
   onOpenStyle,
+  onOpenImageUpload,
 }) => {
   return (
     <div className="mind-map-toolbar">
@@ -72,6 +76,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
         icon={<StyleIcon />}
         hoverColor="#fff7e6"
         hoverBorderColor="#fa8c16"
+      />
+
+      {/* 图片按钮 */}
+      <ToolbarButton
+        label="图片"
+        disabled={!hasSelectedNode}
+        onClick={onOpenImageUpload}
+        icon={<ImageIcon />}
+        hoverColor="#f0f5ff"
+        hoverBorderColor="#597ef7"
       />
     </div>
   );

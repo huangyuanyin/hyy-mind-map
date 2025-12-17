@@ -141,6 +141,16 @@ export class RichTextPlugin extends Plugin {
       this.context.eventSystem.emit('tableMenuTrigger', { nodeId, type, index, rect });
     });
 
+    // 图片尺寸更新回调
+    this.nodeDOMRenderer.setImageResizeCallback((nodeId, imageData) => {
+      const node = this.context.nodeManager.findNode(nodeId);
+      if (node?.config) {
+        this.context.mindMap.saveHistory('resizeImage', '调整图片大小');
+        node.config.image = imageData;
+        this.context.mindMap.relayout();
+      }
+    });
+
     // 尺寸更新回调（当附件节点的实际尺寸与计算尺寸不同时）
     this.nodeDOMRenderer.setOnSizeUpdateCallback(() => {
       // 重新渲染 Canvas 以使用更新后的节点尺寸
@@ -228,6 +238,15 @@ export class RichTextPlugin extends Plugin {
   clearTableHighlight(): void {
     if (this.nodeDOMRenderer) {
       this.nodeDOMRenderer.clearTableHighlight();
+    }
+  }
+
+  /**
+   * 清除图片选中状态
+   */
+  clearImageSelection(): void {
+    if (this.nodeDOMRenderer) {
+      this.nodeDOMRenderer.clearImageSelection();
     }
   }
 

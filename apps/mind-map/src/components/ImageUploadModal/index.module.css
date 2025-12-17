@@ -1,0 +1,253 @@
+.modal :global(.arco-modal-content) {
+  padding: 0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.modal :global(.arco-modal-wrapper) {
+  border-radius: 16px;
+}
+
+.container {
+  padding: 20px 24px 24px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: none;
+  background: #f0f0f0;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #666;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+  transition: all 0.15s;
+}
+
+.closeBtn:hover {
+  background: #e5e5e5;
+  color: #333;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: #f5f5f5;
+  border-radius: 12px;
+  margin-bottom: 20px;
+}
+
+.tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.15s;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.tab:hover {
+  color: #333;
+}
+
+.tab:focus,
+.tab:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.tab.active {
+  background: #fff;
+  color: #1a1a1a;
+}
+
+.tab svg {
+  flex-shrink: 0;
+}
+
+.content {
+  min-height: 200px;
+}
+
+.dropZone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  border: 2px dashed #e0e0e0;
+  border-radius: 16px;
+  background: #fafafa;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dropZone:hover {
+  border-color: #bbb;
+  background: #f5f5f5;
+}
+
+.dropZone.dragOver {
+  border-color: #2563eb;
+  background: #eff6ff;
+  border-style: solid;
+}
+
+.dropZone.uploading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.iconStack {
+  position: relative;
+  width: 100px;
+  height: 70px;
+  margin-bottom: 16px;
+}
+
+.iconBg {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 24px;
+  left: 50%;
+  top: 50%;
+  margin-left: -24px;
+  margin-top: -24px;
+  transition: transform 0.2s;
+}
+
+.dropZone:hover .iconBg:first-child {
+  transform: rotate(-12deg) translateX(-8px);
+}
+
+.dropZone:hover .iconBg:nth-child(2) {
+  transform: rotate(12deg) translateX(8px);
+}
+
+.dropText {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin: 0 0 6px;
+}
+
+.dropHint {
+  font-size: 12px;
+  color: #999;
+  margin: 0;
+}
+
+.embedSection {
+  padding: 20px 0;
+}
+
+.embedSection :global(.arco-input) {
+  border-radius: 12px !important;
+  border: 1px solid #e0e0e0 !important;
+  font-size: 14px;
+  padding: 10px 14px;
+  height: 44px;
+  transition: border-color 0.2s;
+}
+
+.embedSection :global(.arco-input:focus) {
+  border-color: #1a1a1a !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.embedSection :global(.arco-input:hover:not(:focus)) {
+  border-color: #999 !important;
+}
+
+.embedHint {
+  font-size: 12px;
+  color: #999;
+  margin: 12px 0 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.btnSecondary {
+  padding: 10px 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fff;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btnSecondary:hover {
+  background: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.btnPrimary {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 10px;
+  background: #1a1a1a;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btnPrimary:hover:not(:disabled) {
+  background: #333;
+}
+
+.btnPrimary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}

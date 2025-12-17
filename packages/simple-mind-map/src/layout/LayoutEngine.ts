@@ -57,6 +57,7 @@ export class LayoutEngine {
   private measureNode(node: HyyMindMapNode): void {
     const attachment = node.config?.attachment;
     const icons = node.config?.icons ?? node.config?.icon;
+    const imageData = node.config?.image;
     
     // 计算图标宽度
     let iconWidth = 0;
@@ -71,15 +72,26 @@ export class LayoutEngine {
       }
     }
     
+    // 计算图片尺寸
+    let imageWidth = 0;
+    let imageHeight = 0;
+    const IMAGE_MARGIN = 8; // 图片与文本的间距
+    
+    if (imageData) {
+      imageWidth = imageData.displayWidth || 200;
+      const aspectRatio = (imageData.height || 1) / (imageData.width || 1);
+      imageHeight = Math.floor(imageWidth * aspectRatio);
+    }
+    
     // 根据附加内容类型选择测量方法
     if (attachment?.type === 'table' && attachment.table) {
       const size = this.renderer.measureTable(attachment.table);
-      node.width = Math.max(size.width + iconWidth, LAYOUT.MIN_NODE_WIDTH);
-      node.height = size.height;
+      node.width = Math.max(size.width + iconWidth, imageWidth + 20, LAYOUT.MIN_NODE_WIDTH);
+      node.height = size.height + (imageData ? imageHeight + IMAGE_MARGIN : 0);
     } else if (attachment?.type === 'code' && attachment.codeBlock) {
       const size = this.renderer.measureCodeBlock(attachment.codeBlock);
-      node.width = Math.max(size.width + iconWidth, LAYOUT.MIN_NODE_WIDTH);
-      node.height = size.height;
+      node.width = Math.max(size.width + iconWidth, imageWidth + 20, LAYOUT.MIN_NODE_WIDTH);
+      node.height = size.height + (imageData ? imageHeight + IMAGE_MARGIN : 0);
     } else {
       // 普通文本节点
       const fontSize = node.config?.fontSize;
@@ -88,16 +100,16 @@ export class LayoutEngine {
       
       // 限制最大宽度，超过则换行
       if (size.width > LAYOUT.MAX_NODE_WIDTH) {
-        node.width = LAYOUT.MAX_NODE_WIDTH;
+        node.width = Math.max(LAYOUT.MAX_NODE_WIDTH, imageWidth + 20);
         // 计算换行后的行数和高度
         const lineCount = Math.ceil(size.width / (LAYOUT.MAX_NODE_WIDTH - 20)); // 减去 padding
         const actualFontSize = fontSize || 14;
         const lineHeight = actualFontSize * 1.5;
         const padding = 10;
-        node.height = lineCount * lineHeight + padding * 2;
+        node.height = lineCount * lineHeight + padding * 2 + (imageData ? imageHeight + IMAGE_MARGIN : 0);
       } else {
-        node.width = Math.max(size.width, LAYOUT.MIN_NODE_WIDTH);
-        node.height = size.height;
+        node.width = Math.max(size.width, imageWidth + 20, LAYOUT.MIN_NODE_WIDTH);
+        node.height = size.height + (imageData ? imageHeight + IMAGE_MARGIN : 0);
       }
     }
   }

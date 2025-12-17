@@ -12,3 +12,5 @@ export { useClickOutside } from './useClickOutside';
 
 export { useTableMenuManager } from './useTableMenuManager';
 export { useTableOperations } from './useTableOperations';
+
+export { useImagePaste } from './useImagePaste';

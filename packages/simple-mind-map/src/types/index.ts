@@ -47,6 +47,26 @@ export interface CodeBlockData {
 }
 
 /**
+ * 图片数据
+ */
+export interface ImageData {
+  /** Base64 编码的图片数据 */
+  base64: string;
+  /** 原始文件名 */
+  fileName?: string;
+  /** 图片原始宽度 */
+  width?: number;
+  /** 图片原始高度 */
+  height?: number;
+  /** 显示宽度（用户可调整） */
+  displayWidth?: number;
+  /** 显示高度（根据宽度自动计算） */
+  displayHeight?: number;
+  /** 上传时间戳 */
+  uploadTime?: number;
+}
+
+/**
  * 节点内容类型
  */
 export type NodeContentType = 'text' | 'table' | 'code';
@@ -122,6 +142,8 @@ export interface NodeConfig {
   icons?: Record<string, string>;
   /** 附加内容（表格、代码块等） */
   attachment?: NodeAttachment;
+  /** 节点图片 */
+  image?: ImageData;
 }
 
 /**
