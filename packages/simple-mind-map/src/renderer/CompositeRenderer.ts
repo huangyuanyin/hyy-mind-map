@@ -43,6 +43,9 @@ export class CompositeRenderer implements IRenderer {
   // 是否使用 DOM 渲染节点
   private useDOMNodes: boolean = false;
 
+  // 当前图片选中的节点 ID（用于跳过该节点的选中边框绘制）
+  private imageSelectedNodeId: string | null = null;
+
   // 渲染策略组合
   private lineRenderer: LineRenderer;
   private nodeShapeRenderer: NodeShapeRenderer;
@@ -106,6 +109,14 @@ export class CompositeRenderer implements IRenderer {
   }
 
   /**
+   * 设置当前图片选中的节点 ID
+   * 当图片被选中时，该节点不绘制选中边框
+   */
+  setImageSelectedNodeId(nodeId: string | null): void {
+    this.imageSelectedNodeId = nodeId;
+  }
+
+  /**
    * 主渲染方法 - 使用组合模式
    */
   render(root: HyyMindMapNode | null): void {
@@ -163,8 +174,8 @@ export class CompositeRenderer implements IRenderer {
    * 递归渲染节点
    */
   private renderNodesRecursive(node: HyyMindMapNode): void {
-    // 渲染节点形状
-    this.nodeShapeRenderer.render(this.offscreenCtx, node, this.theme);
+    // 渲染节点形状（传入图片选中节点 ID，以跳过该节点的选中边框）
+    this.nodeShapeRenderer.render(this.offscreenCtx, node, this.theme, this.imageSelectedNodeId);
 
     // 渲染节点内容
     this.nodeContentRenderer.render(this.offscreenCtx, node, this.theme);

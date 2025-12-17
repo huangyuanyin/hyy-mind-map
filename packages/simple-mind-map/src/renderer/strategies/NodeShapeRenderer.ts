@@ -5,11 +5,16 @@ import { BaseRenderer } from './BaseRenderer';
 export class NodeShapeRenderer extends BaseRenderer {
   /**
    * 渲染节点形状（背景和边框）
+   * @param ctx Canvas 2D 上下文
+   * @param node 节点数据
+   * @param theme 主题配置
+   * @param imageSelectedNodeId 当前图片选中的节点 ID，该节点不绘制选中边框
    */
   render(
     ctx: CanvasRenderingContext2D,
     node: HyyMindMapNode,
-    theme: Theme
+    theme: Theme,
+    imageSelectedNodeId?: string | null
   ): void {
     ctx.save();
 
@@ -20,12 +25,16 @@ export class NodeShapeRenderer extends BaseRenderer {
     const customBgColor = node.config?.backgroundColor;
     const customBorderColor = node.config?.borderColor;
 
+    // 检查当前节点的图片是否被选中
+    const isImageSelected = imageSelectedNodeId === node.id;
+
     // 1. 绘制背景
     ctx.fillStyle = customBgColor || theme.nodeBackgroundColor;
     this.drawRoundedRect(ctx, x, y, width, height, radius, true, false);
 
     // 2. 绘制边框
-    if (node.isSelected || node.isActive) {
+    // 如果该节点的图片被选中，则不绘制节点选中边框
+    if ((node.isSelected || node.isActive) && !isImageSelected) {
       // 选中或激活状态 - 高亮边框
       ctx.strokeStyle = theme.nodeSelectedBorderColor;
       ctx.lineWidth = 2;

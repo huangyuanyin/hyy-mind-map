@@ -26,6 +26,11 @@ interface ImageResizeState {
 }
 
 /**
+ * 图片选中状态变化回调
+ */
+export type ImageSelectCallback = (nodeId: string | null) => void;
+
+/**
  * 图片调整处理器配置
  */
 export interface ImageResizeHandlerConfig {
@@ -35,6 +40,8 @@ export interface ImageResizeHandlerConfig {
   getNodeDataCache: () => Map<string, HyyMindMapNode>;
   /** 图片尺寸更新回调 */
   onImageResize?: ImageResizeCallback;
+  /** 图片选中状态变化回调 */
+  onImageSelect?: ImageSelectCallback;
 }
 
 /**
@@ -122,12 +129,17 @@ export class ImageResizeHandler {
 
     // 添加全局点击监听器，点击其他地方时取消选中
     this.addGlobalClickListener();
+
+    // 通知外部图片被选中
+    this.config.onImageSelect?.(nodeId);
   }
 
   /**
    * 清除图片选中状态
    */
   public clearImageSelection(): void {
+    const hadSelection = this.selectedImageNodeId !== null;
+
     if (this.selectedImageContainer) {
       // 移除所有调整手柄
       const handles = this.selectedImageContainer.querySelectorAll('.image-resize-handle');
@@ -144,6 +156,11 @@ export class ImageResizeHandler {
     this.selectedImageContainer = null;
     this.selectedImageNodeId = null;
     this.removeGlobalClickListener();
+
+    // 通知外部图片取消选中
+    if (hadSelection) {
+      this.config.onImageSelect?.(null);
+    }
   }
 
   /**

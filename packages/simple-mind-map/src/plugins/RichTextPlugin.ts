@@ -151,6 +151,12 @@ export class RichTextPlugin extends Plugin {
       }
     });
 
+    // 图片选中状态变化回调
+    this.nodeDOMRenderer.setImageSelectChangeCallback((nodeId) => {
+      this.context.renderer.setImageSelectedNodeId(nodeId);
+      this.context.mindMap.scheduleRender();
+    });
+
     // 尺寸更新回调（当附件节点的实际尺寸与计算尺寸不同时）
     this.nodeDOMRenderer.setOnSizeUpdateCallback(() => {
       // 重新渲染 Canvas 以使用更新后的节点尺寸

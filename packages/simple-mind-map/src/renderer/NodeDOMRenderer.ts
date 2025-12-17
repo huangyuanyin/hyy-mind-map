@@ -45,6 +45,11 @@ export type TableMenuTriggerCallback = (
 ) => void;
 
 /**
+ * 图片选中状态变化回调
+ */
+export type ImageSelectChangeCallback = (nodeId: string | null) => void;
+
+/**
  * 节点 DOM 渲染器
  * 负责将节点渲染为 DOM 元素
  */
@@ -89,6 +94,10 @@ export class NodeDOMRenderer {
   private wasNodeSelectedOnMouseDown: Map<string, boolean> = new Map();
   // 图片调整处理器
   private imageResizeHandler: ImageResizeHandler;
+  // 当前图片选中的节点 ID（用于隐藏节点选中态）
+  private imageSelectedNodeId: string | null = null;
+  // 图片选中状态变化回调
+  private onImageSelectChange: ImageSelectChangeCallback | null = null;
 
   constructor(container: HTMLElement, theme?: Partial<Theme>) {
     this.container = container;
@@ -99,6 +108,30 @@ export class NodeDOMRenderer {
     this.imageResizeHandler = new ImageResizeHandler({
       getViewState: () => this.viewState,
       getNodeDataCache: () => this.nodeDataCache,
+      onImageSelect: (nodeId) => {
+        const prevNodeId = this.imageSelectedNodeId;
+        this.imageSelectedNodeId = nodeId;
+
+        // 图片选中时，更新对应节点的样式（隐藏选中态）
+        if (nodeId) {
+          const element = this.nodeElements.get(nodeId);
+          const node = this.nodeDataCache.get(nodeId);
+          if (element && node) {
+            this.updateNodeStyles(element, node);
+          }
+        }
+
+        // 图片取消选中时，恢复之前节点的选中态
+        if (prevNodeId && !nodeId) {
+          const element = this.nodeElements.get(prevNodeId);
+          const node = this.nodeDataCache.get(prevNodeId);
+          if (element && node) {
+            this.updateNodeStyles(element, node);
+          }
+        }
+
+        this.onImageSelectChange?.(nodeId);
+      },
     });
   }
 
@@ -156,6 +189,13 @@ export class NodeDOMRenderer {
    */
   public setImageResizeCallback(callback: ImageResizeCallback): void {
     this.imageResizeHandler.setImageResizeCallback(callback);
+  }
+
+  /**
+   * 设置图片选中状态变化回调
+   */
+  public setImageSelectChangeCallback(callback: ImageSelectChangeCallback): void {
+    this.onImageSelectChange = callback;
   }
 
   // 高亮覆盖层元素
@@ -908,11 +948,20 @@ export class NodeDOMRenderer {
     // 获取自定义边框色
     const customBorderColor = node.config?.borderColor;
 
+    // 检查当前节点的图片是否被选中
+    const isImageSelected = this.imageSelectedNodeId === node.id;
+
     // 始终保持 2px 边框，只改变颜色，避免 hover/选中时布局偏移
-    if (node.isSelected || node.isActive) {
+    if ((node.isSelected || node.isActive) && !isImageSelected) {
+      // 节点选中/激活状态，但图片未选中时，显示节点选中样式
       element.style.border = `2px solid ${this.theme.nodeSelectedBorderColor}`;
       element.style.boxShadow = `0 0 0 2px ${this.theme.nodeSelectedBorderColor}20`;
       element.dataset.selected = 'true';
+    } else if ((node.isSelected || node.isActive) && isImageSelected) {
+      // 图片选中时，隐藏节点的选中/激活样式
+      element.style.border = `2px solid ${customBorderColor || 'transparent'}`;
+      element.style.boxShadow = 'none';
+      element.dataset.selected = 'false';
     } else if (node.isHover) {
       element.style.border = `2px solid ${customBorderColor || this.theme.nodeBorderColor}`;
       element.style.boxShadow = 'none';
