@@ -151,6 +151,16 @@ export class RichTextPlugin extends Plugin {
       }
     });
 
+    // 图片位置更新回调
+    this.nodeDOMRenderer.setImagePositionCallback((nodeId, position) => {
+      const node = this.context.nodeManager.findNode(nodeId);
+      if (node?.config?.image) {
+        this.context.mindMap.saveHistory('moveImage', '移动图片位置');
+        node.config.image.position = position;
+        this.context.mindMap.relayout();
+      }
+    });
+
     // 图片选中状态变化回调
     this.nodeDOMRenderer.setImageSelectChangeCallback((nodeId) => {
       this.context.renderer.setImageSelectedNodeId(nodeId);
@@ -162,10 +172,17 @@ export class RichTextPlugin extends Plugin {
       this.context.eventSystem.emit('imagePreview', { imageData });
     });
 
-    // 尺寸更新回调（当附件节点的实际尺寸与计算尺寸不同时）
+    // 尺寸更新回调（当节点的实际尺寸与计算尺寸不同时，需要重新计算位置）
     this.nodeDOMRenderer.setOnSizeUpdateCallback(() => {
-      // 重新渲染 Canvas 以使用更新后的节点尺寸
-      this.context.mindMap.scheduleRender();
+      const root = this.context.nodeManager.getRoot();
+      if (!root) return;
+      
+      const rootCenterX = root.x + root.width / 2;
+      const rootCenterY = root.y + root.height / 2;
+      
+      // 仅重新计算位置，不重新测量尺寸
+      this.context.layoutEngine.layoutPositionsOnly(root, rootCenterX, rootCenterY);
+      this.context.mindMap.render();
     });
   }
 

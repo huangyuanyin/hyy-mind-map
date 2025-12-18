@@ -1,10 +1,15 @@
 import type { HyyMindMapNode } from '../core/HyyMindMapNode';
-import type { ImageData, ViewState } from '../types';
+import type { ImageData, ViewState, ImagePosition } from '../types';
 
 /**
  * 图片尺寸更新回调
  */
 export type ImageResizeCallback = (nodeId: string, imageData: ImageData) => void;
+
+/**
+ * 图片位置更新回调
+ */
+export type ImagePositionCallback = (nodeId: string, position: ImagePosition) => void;
 
 /**
  * 调整手柄位置类型
@@ -23,6 +28,36 @@ interface ImageResizeState {
   handlePosition: ResizeHandlePosition;
   aspectRatio: number;
   ghostElement: HTMLElement | null;
+}
+
+/**
+ * 图片拖拽状态
+ */
+interface ImageDragState {
+  isDragging: boolean;
+  startX: number;
+  startY: number;
+  ghostElement: HTMLElement | null;
+  /** 上方位置指示器 */
+  aboveIndicator: HTMLElement | null;
+  /** 下方位置指示器 */
+  belowIndicator: HTMLElement | null;
+  /** 左侧位置指示器 */
+  leftIndicator: HTMLElement | null;
+  /** 右侧位置指示器 */
+  rightIndicator: HTMLElement | null;
+  /** 橙色主边框 */
+  borderOverlay: HTMLElement | null;
+  /** 左侧垂直分隔线 */
+  leftDivider: HTMLElement | null;
+  /** 右侧垂直分隔线 */
+  rightDivider: HTMLElement | null;
+  /** 中间水平分隔线 */
+  middleDivider: HTMLElement | null;
+  /** 当前选择的位置（根据拖拽方向） */
+  hoverPosition: ImagePosition | null;
+  /** 节点元素引用，用于清理 */
+  nodeElement: HTMLElement | null;
 }
 
 /**
@@ -45,11 +80,16 @@ export interface ImageResizeHandlerConfig {
   getNodeDataCache: () => Map<string, HyyMindMapNode>;
   /** 图片尺寸更新回调 */
   onImageResize?: ImageResizeCallback;
+  /** 图片位置更新回调 */
+  onImagePosition?: ImagePositionCallback;
   /** 图片选中状态变化回调 */
   onImageSelect?: ImageSelectCallback;
   /** 图片双击查看原图回调 */
   onImagePreview?: ImagePreviewCallback;
 }
+
+/** 拖拽阈值 */
+const DRAG_THRESHOLD = 5;
 
 /**
  * 图片调整处理器
@@ -64,6 +104,10 @@ export class ImageResizeHandler {
   private selectedImageNodeId: string | null = null;
   // 图片调整状态
   private imageResizeState: ImageResizeState | null = null;
+  // 图片拖拽状态
+  private imageDragState: ImageDragState | null = null;
+  // 是否正在拖拽
+  private isDraggingImage: boolean = false;
 
   constructor(config: ImageResizeHandlerConfig) {
     this.config = config;
@@ -74,6 +118,13 @@ export class ImageResizeHandler {
    */
   public setImageResizeCallback(callback: ImageResizeCallback): void {
     this.config.onImageResize = callback;
+  }
+
+  /**
+   * 设置图片位置更新回调
+   */
+  public setImagePositionCallback(callback: ImagePositionCallback): void {
+    this.config.onImagePosition = callback;
   }
 
   /**
@@ -98,15 +149,54 @@ export class ImageResizeHandler {
     nodeId: string,
     imageData: ImageData
   ): void {
-    wrapper.addEventListener('click', (e) => {
-      // 检查节点是否被选中
+    wrapper.style.cursor = 'pointer';
+
+    // 禁用图片的默认拖拽行为
+    const img = wrapper.querySelector('.node-image') as HTMLImageElement;
+    if (img) {
+      img.draggable = false;
+      img.addEventListener('dragstart', (e) => {
+        e.preventDefault();
+        return false;
+      });
+    }
+
+    // 记录 mousedown 时节点是否已选中
+    let wasNodeSelectedOnMouseDown = false;
+
+    wrapper.addEventListener('mousedown', (e) => {
       const node = this.config.getNodeDataCache().get(nodeId);
-      if (!node?.isSelected && !node?.isActive) {
+      // 记录当前节点的选中状态
+      wasNodeSelectedOnMouseDown = !!(node?.isSelected || node?.isActive);
+
+      if ((e.target as HTMLElement).classList.contains('image-resize-handle')) {
         return;
       }
 
-      // 节点已选中时，阻止事件冒泡，避免触发节点编辑
+      // 只有图片被选中时才允许拖拽
+      if (this.selectedImageNodeId === nodeId) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.startDragDetection(e, wrapper, nodeId, imageData);
+      } else if (wasNodeSelectedOnMouseDown) {
+        // 节点已选中但图片未选中时，阻止冒泡避免触发节点编辑
+        e.stopPropagation();
+      }
+    });
+
+    wrapper.addEventListener('click', (e) => {
+      // 只有在 mousedown 时节点就已选中，才能选中图片
+      if (!wasNodeSelectedOnMouseDown) {
+        return;
+      }
+
+      // 阻止事件冒泡，避免触发节点编辑
       e.stopPropagation();
+
+      // 如果刚刚完成拖拽，不处理 click 事件
+      if (this.isDraggingImage) {
+        return;
+      }
 
       // 如果点击的是调整手柄，不处理
       if ((e.target as HTMLElement).classList.contains('image-resize-handle')) {
@@ -129,14 +219,451 @@ export class ImageResizeHandler {
         this.config.onImagePreview(imageData);
       }
     });
+  }
 
-    // 只有当节点已选中时才阻止 mousedown 事件冒泡
-    wrapper.addEventListener('mousedown', (e) => {
-      const node = this.config.getNodeDataCache().get(nodeId);
-      if (node?.isSelected || node?.isActive) {
-        e.stopPropagation();
+  /**
+   * 启动拖拽检测
+   */
+  private startDragDetection(
+    e: MouseEvent,
+    wrapper: HTMLElement,
+    nodeId: string,
+    _imageData: ImageData
+  ): void {
+    if (this.imageDragState) {
+      this.cleanupDrag();
+    }
+
+    // 找到节点元素
+    const nodeElement = wrapper.closest('.mind-map-node') as HTMLElement;
+    if (!nodeElement) {
+      return;
+    }
+
+    // 清理 body 上可能残留的旧指示器、边框和分隔线
+    document.body.querySelectorAll(
+      '.image-position-overlay, .image-position-border-overlay, .image-position-divider-left, .image-position-divider-right, .image-position-divider-middle'
+    ).forEach(el => el.remove());
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isDragStarted = false;
+
+    // 创建边框和指示器
+    const createIndicators = () => {
+      const nodeRect = nodeElement.getBoundingClientRect();
+
+      // 获取节点的 border-radius，确保边框和节点匹配
+      const nodeComputedStyle = window.getComputedStyle(nodeElement);
+      const nodeBorderRadius = nodeComputedStyle.borderRadius || '8px';
+
+      // 创建主边框（覆盖整个节点）
+      const borderWidth = 2;
+      const borderOverlay = document.createElement('div');
+      borderOverlay.className = 'image-position-border-overlay';
+      borderOverlay.style.cssText = `
+        position: fixed;
+        left: ${nodeRect.left - borderWidth}px;
+        top: ${nodeRect.top - borderWidth}px;
+        width: ${nodeRect.width}px;
+        height: ${nodeRect.height}px;
+        border: ${borderWidth}px solid #ff7a45;
+        border-radius: ${nodeBorderRadius};
+        pointer-events: none;
+        z-index: 999999;
+        box-sizing: content-box;
+      `;
+      document.body.appendChild(borderOverlay);
+
+      // 创建四个方向的遮罩（不带边框，只有背景色）
+      const createOverlay = (position: ImagePosition): HTMLElement => {
+      const overlay = document.createElement('div');
+      overlay.className = `image-position-overlay image-position-overlay-${position}`;
+
+      let left = nodeRect.left;
+      let top = nodeRect.top;
+      let width = nodeRect.width;
+      let height = nodeRect.height;
+
+      // 将宽度分为三份，高度分为两份
+      const thirdWidth = nodeRect.width / 3;
+      const halfHeight = nodeRect.height / 2;
+
+      switch (position) {
+        case 'left':
+          // 左侧：完整高度，1/3 宽度
+          width = thirdWidth;
+          break;
+        case 'above':
+          // 中间上部分：中间 1/3 宽度，上半高度
+          left = nodeRect.left + thirdWidth;
+          width = thirdWidth;
+          height = halfHeight;
+          break;
+        case 'below':
+          // 中间下部分：中间 1/3 宽度，下半高度
+          left = nodeRect.left + thirdWidth;
+          top = nodeRect.top + halfHeight;
+          width = thirdWidth;
+          height = halfHeight;
+          break;
+        case 'right':
+          // 右侧：完整高度，1/3 宽度
+          left = nodeRect.left + thirdWidth * 2;
+          width = thirdWidth;
+          break;
       }
+
+      overlay.style.setProperty('position', 'fixed', 'important');
+      overlay.style.setProperty('left', `${left}px`, 'important');
+      overlay.style.setProperty('top', `${top}px`, 'important');
+      overlay.style.setProperty('width', `${width}px`, 'important');
+      overlay.style.setProperty('height', `${height}px`, 'important');
+      overlay.style.setProperty('background-color', 'rgba(255, 122, 69, 0.1)', 'important');
+      overlay.style.setProperty('pointer-events', 'none', 'important');
+      overlay.style.setProperty('z-index', '999998', 'important');
+      overlay.style.setProperty('transition', 'background-color 0.2s ease-out', 'important');
+      overlay.style.setProperty('box-sizing', 'border-box', 'important');
+
+        return overlay;
+      };
+
+      // 创建四个方向的遮罩（只有背景色）
+      const aboveIndicator = createOverlay('above');
+      const belowIndicator = createOverlay('below');
+      const leftIndicator = createOverlay('left');
+      const rightIndicator = createOverlay('right');
+
+      // 创建分隔线
+      const thirdWidth = nodeRect.width / 3;
+      const halfHeight = nodeRect.height / 2;
+
+      // 左侧垂直分隔线
+      const leftDivider = document.createElement('div');
+      leftDivider.className = 'image-position-divider-left';
+      leftDivider.style.cssText = `
+        position: fixed;
+        left: ${nodeRect.left + thirdWidth}px;
+        top: ${nodeRect.top}px;
+        width: 2px;
+        height: ${nodeRect.height}px;
+        background-color: #ff7a45;
+        pointer-events: none;
+        z-index: 999999;
+      `;
+
+      // 右侧垂直分隔线
+      const rightDivider = document.createElement('div');
+      rightDivider.className = 'image-position-divider-right';
+      rightDivider.style.cssText = `
+        position: fixed;
+        left: ${nodeRect.left + thirdWidth * 2}px;
+        top: ${nodeRect.top}px;
+        width: 2px;
+        height: ${nodeRect.height}px;
+        background-color: #ff7a45;
+        pointer-events: none;
+        z-index: 999999;
+      `;
+
+      // 中间水平分隔线
+      const middleDivider = document.createElement('div');
+      middleDivider.className = 'image-position-divider-middle';
+      middleDivider.style.cssText = `
+        position: fixed;
+        left: ${nodeRect.left + thirdWidth}px;
+        top: ${nodeRect.top + halfHeight}px;
+        width: ${thirdWidth}px;
+        height: 2px;
+        background-color: #ff7a45;
+        pointer-events: none;
+        z-index: 999999;
+      `;
+
+      // 添加遮罩和分隔线到 body
+      [aboveIndicator, belowIndicator, leftIndicator, rightIndicator, leftDivider, rightDivider, middleDivider].forEach(
+        el => document.body.appendChild(el)
+      );
+
+      return {
+        borderOverlay,
+        aboveIndicator,
+        belowIndicator,
+        leftIndicator,
+        rightIndicator,
+        leftDivider,
+        rightDivider,
+        middleDivider,
+      };
+    };
+
+    // 初始化拖拽状态
+    this.imageDragState = {
+      isDragging: false,
+      startX,
+      startY,
+      ghostElement: null,
+      aboveIndicator: null,
+      belowIndicator: null,
+      leftIndicator: null,
+      rightIndicator: null,
+      borderOverlay: null,
+      leftDivider: null,
+      rightDivider: null,
+      middleDivider: null,
+      hoverPosition: null,
+      nodeElement,
+    };
+
+    // 更新所有元素的位置和尺寸
+    const updatePositions = () => {
+      if (!this.imageDragState || !nodeElement) return;
+
+      // 重新获取节点的实际位置和尺寸
+      const currentRect = nodeElement.getBoundingClientRect();
+      const thirdWidth = currentRect.width / 3;
+      const halfHeight = currentRect.height / 2;
+      const borderWidth = 2;
+
+      // 更新主边框（需要偏移以完全包围节点）
+      if (this.imageDragState.borderOverlay) {
+        this.imageDragState.borderOverlay.style.left = `${currentRect.left - borderWidth}px`;
+        this.imageDragState.borderOverlay.style.top = `${currentRect.top - borderWidth}px`;
+        this.imageDragState.borderOverlay.style.width = `${currentRect.width}px`;
+        this.imageDragState.borderOverlay.style.height = `${currentRect.height}px`;
+      }
+
+      // 更新左侧指示器
+      if (this.imageDragState.leftIndicator) {
+        this.imageDragState.leftIndicator.style.left = `${currentRect.left}px`;
+        this.imageDragState.leftIndicator.style.top = `${currentRect.top}px`;
+        this.imageDragState.leftIndicator.style.width = `${thirdWidth}px`;
+        this.imageDragState.leftIndicator.style.height = `${currentRect.height}px`;
+      }
+
+      // 更新上方指示器
+      if (this.imageDragState.aboveIndicator) {
+        this.imageDragState.aboveIndicator.style.left = `${currentRect.left + thirdWidth}px`;
+        this.imageDragState.aboveIndicator.style.top = `${currentRect.top}px`;
+        this.imageDragState.aboveIndicator.style.width = `${thirdWidth}px`;
+        this.imageDragState.aboveIndicator.style.height = `${halfHeight}px`;
+      }
+
+      // 更新下方指示器
+      if (this.imageDragState.belowIndicator) {
+        this.imageDragState.belowIndicator.style.left = `${currentRect.left + thirdWidth}px`;
+        this.imageDragState.belowIndicator.style.top = `${currentRect.top + halfHeight}px`;
+        this.imageDragState.belowIndicator.style.width = `${thirdWidth}px`;
+        this.imageDragState.belowIndicator.style.height = `${halfHeight}px`;
+      }
+
+      // 更新右侧指示器
+      if (this.imageDragState.rightIndicator) {
+        this.imageDragState.rightIndicator.style.left = `${currentRect.left + thirdWidth * 2}px`;
+        this.imageDragState.rightIndicator.style.top = `${currentRect.top}px`;
+        this.imageDragState.rightIndicator.style.width = `${thirdWidth}px`;
+        this.imageDragState.rightIndicator.style.height = `${currentRect.height}px`;
+      }
+
+      // 更新左侧分隔线
+      if (this.imageDragState.leftDivider) {
+        this.imageDragState.leftDivider.style.left = `${currentRect.left + thirdWidth}px`;
+        this.imageDragState.leftDivider.style.top = `${currentRect.top}px`;
+        this.imageDragState.leftDivider.style.height = `${currentRect.height}px`;
+      }
+
+      // 更新右侧分隔线
+      if (this.imageDragState.rightDivider) {
+        this.imageDragState.rightDivider.style.left = `${currentRect.left + thirdWidth * 2}px`;
+        this.imageDragState.rightDivider.style.top = `${currentRect.top}px`;
+        this.imageDragState.rightDivider.style.height = `${currentRect.height}px`;
+      }
+
+      // 更新中间分隔线
+      if (this.imageDragState.middleDivider) {
+        this.imageDragState.middleDivider.style.left = `${currentRect.left + thirdWidth}px`;
+        this.imageDragState.middleDivider.style.top = `${currentRect.top + halfHeight}px`;
+        this.imageDragState.middleDivider.style.width = `${thirdWidth}px`;
+      }
+    };
+
+    // 更新遮罩层显示状态（基于鼠标位置判断在哪个区域）
+    const updateIndicators = (mouseX: number, mouseY: number) => {
+      if (!this.imageDragState) return;
+
+      // 先更新所有元素的位置
+      updatePositions();
+
+      // 获取节点的当前位置
+      const currentRect = nodeElement.getBoundingClientRect();
+      const relativeX = mouseX - currentRect.left;
+      const relativeY = mouseY - currentRect.top;
+      const thirdWidth = currentRect.width / 3;
+      const halfHeight = currentRect.height / 2;
+
+      const dimOpacity = 'rgba(255, 122, 69, 0.05)';
+      const highlightOpacity = 'rgba(255, 122, 69, 0.25)';
+
+      // 判断鼠标在哪个区域
+      let selectedPosition: ImagePosition;
+      if (relativeX < thirdWidth) {
+        selectedPosition = 'left';
+      } else if (relativeX > thirdWidth * 2) {
+        selectedPosition = 'right';
+      } else if (relativeY < halfHeight) {
+        selectedPosition = 'above';
+      } else {
+        selectedPosition = 'below';
+      }
+
+      // 更新所有指示器的背景色
+      const indicators = {
+        left: this.imageDragState.leftIndicator,
+        right: this.imageDragState.rightIndicator,
+        above: this.imageDragState.aboveIndicator,
+        below: this.imageDragState.belowIndicator,
+      };
+
+      for (const [position, indicator] of Object.entries(indicators)) {
+        indicator?.style.setProperty(
+          'background-color',
+          position === selectedPosition ? highlightOpacity : dimOpacity,
+          'important'
+        );
+      }
+
+      this.imageDragState.hoverPosition = selectedPosition;
+    };
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const deltaX = moveEvent.clientX - startX;
+      const deltaY = moveEvent.clientY - startY;
+      const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      // 超过拖拽阈值后显示指示器
+      if (!isDragStarted && distance >= DRAG_THRESHOLD) {
+        isDragStarted = true;
+        this.isDraggingImage = true;
+
+        // 创建指示器和边框
+        const indicators = createIndicators();
+        if (this.imageDragState) {
+          Object.assign(this.imageDragState, {
+            isDragging: true,
+            ...indicators,
+          });
+        }
+
+        // 降低节点内容的透明度
+        this.setNodeContentOpacity(nodeElement, '0.4');
+        wrapper.style.cursor = 'grabbing';
+        document.body.style.cursor = 'grabbing';
+      }
+
+      // 如果已经开始拖拽，更新指示器
+      if (isDragStarted) {
+        updateIndicators(moveEvent.clientX, moveEvent.clientY);
+      }
+    };
+
+    const handleMouseUp = (upEvent: MouseEvent) => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+
+      if (isDragStarted) {
+        const newPosition = this.getPositionFromMouseEvent(upEvent, nodeElement);
+
+        if (newPosition && this.config.onImagePosition) {
+          this.removeGlobalClickListener();
+          this.selectedImageContainer = null;
+          this.config.onImagePosition(nodeId, newPosition);
+        }
+      }
+
+      this.cleanupDrag();
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }
+
+  /**
+   * 根据鼠标事件获取图片位置
+   */
+  private getPositionFromMouseEvent(event: MouseEvent, nodeElement: HTMLElement): ImagePosition {
+    const rect = nodeElement.getBoundingClientRect();
+    const relativeX = event.clientX - rect.left;
+    const relativeY = event.clientY - rect.top;
+    const thirdWidth = rect.width / 3;
+    const halfHeight = rect.height / 2;
+
+    if (relativeX < thirdWidth) return 'left';
+    if (relativeX > thirdWidth * 2) return 'right';
+    if (relativeY < halfHeight) return 'above';
+    return 'below';
+  }
+
+  /**
+   * 设置节点内容的透明度
+   */
+  private setNodeContentOpacity(nodeElement: HTMLElement, opacity: string): void {
+    const nodeContent = nodeElement.querySelector('.node-content') as HTMLElement;
+    const nodeImageContainers = nodeElement.querySelectorAll('.node-image-container') as NodeListOf<HTMLElement>;
+
+    const styleProps = opacity ? { opacity, position: 'relative', zIndex: '1' } : { opacity: '', position: '', zIndex: '' };
+
+    if (nodeContent) {
+      Object.assign(nodeContent.style, styleProps);
+    }
+    nodeImageContainers.forEach(container => {
+      Object.assign(container.style, styleProps);
     });
+  }
+
+  /**
+   * 清理拖拽状态
+   */
+  private cleanupDrag(): void {
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+
+    // 恢复 wrapper 的光标
+    if (this.selectedImageContainer) {
+      this.selectedImageContainer.style.cursor = 'pointer';
+    }
+
+    if (this.imageDragState) {
+      if (this.imageDragState.nodeElement) {
+        this.setNodeContentOpacity(this.imageDragState.nodeElement, '');
+      }
+
+      const elements = [
+        this.imageDragState.aboveIndicator,
+        this.imageDragState.belowIndicator,
+        this.imageDragState.leftIndicator,
+        this.imageDragState.rightIndicator,
+        this.imageDragState.borderOverlay,
+        this.imageDragState.leftDivider,
+        this.imageDragState.rightDivider,
+        this.imageDragState.middleDivider,
+        this.imageDragState.ghostElement,
+      ];
+
+      elements.forEach(el => el?.remove());
+    }
+
+    this.imageDragState = null;
+
+    setTimeout(() => {
+      this.isDraggingImage = false;
+    }, 50);
+
+    if (this.selectedImageContainer) {
+      setTimeout(() => {
+        this.addGlobalClickListener();
+      }, 100);
+    }
   }
 
   /**
@@ -523,7 +1050,13 @@ export class ImageResizeHandler {
    * 处理全局点击（取消图片选中）
    */
   private handleGlobalClick = (e: MouseEvent): void => {
-    if (this.selectedImageContainer?.contains(e.target as Node)) {
+    // 如果 selectedImageContainer 为 null（比如正在位置变更中），不处理
+    if (!this.selectedImageContainer) {
+      return;
+    }
+    
+    // 如果点击的是选中的图片容器内的元素，不取消选中
+    if (this.selectedImageContainer.contains(e.target as Node)) {
       return;
     }
 
@@ -536,6 +1069,7 @@ export class ImageResizeHandler {
   public destroy(): void {
     this.clearImageSelection();
     this.removeGlobalClickListener();
+    this.cleanupDrag();
     document.removeEventListener('mousemove', this.handleImageResizeMove);
     document.removeEventListener('mouseup', this.handleImageResizeEnd);
   }

@@ -2,7 +2,7 @@ import type { HyyMindMapNode } from '../core/HyyMindMapNode';
 import type { Theme, ViewState, RichContent, TableData, CodeBlockData } from '../types';
 import { DEFAULT_THEME } from '../constants/theme';
 import { LAYOUT } from '../constants';
-import { ImageResizeHandler, type ImageResizeCallback, type ImagePreviewCallback } from './ImageResizeHandler';
+import { ImageResizeHandler, type ImageResizeCallback, type ImagePositionCallback, type ImagePreviewCallback } from './ImageResizeHandler';
 
 /**
  * 编辑完成回调
@@ -94,8 +94,6 @@ export class NodeDOMRenderer {
   private wasNodeSelectedOnMouseDown: Map<string, boolean> = new Map();
   // 图片调整处理器
   private imageResizeHandler: ImageResizeHandler;
-  // 当前图片选中的节点 ID（用于隐藏节点选中态）
-  private imageSelectedNodeId: string | null = null;
   // 图片选中状态变化回调
   private onImageSelectChange: ImageSelectChangeCallback | null = null;
 
@@ -109,27 +107,6 @@ export class NodeDOMRenderer {
       getViewState: () => this.viewState,
       getNodeDataCache: () => this.nodeDataCache,
       onImageSelect: (nodeId) => {
-        const prevNodeId = this.imageSelectedNodeId;
-        this.imageSelectedNodeId = nodeId;
-
-        // 图片选中时，更新对应节点的样式（隐藏选中态）
-        if (nodeId) {
-          const element = this.nodeElements.get(nodeId);
-          const node = this.nodeDataCache.get(nodeId);
-          if (element && node) {
-            this.updateNodeStyles(element, node);
-          }
-        }
-
-        // 图片取消选中时，恢复之前节点的选中态
-        if (prevNodeId && !nodeId) {
-          const element = this.nodeElements.get(prevNodeId);
-          const node = this.nodeDataCache.get(prevNodeId);
-          if (element && node) {
-            this.updateNodeStyles(element, node);
-          }
-        }
-
         this.onImageSelectChange?.(nodeId);
       },
     });
@@ -205,8 +182,48 @@ export class NodeDOMRenderer {
     this.imageResizeHandler.setImagePreviewCallback(callback);
   }
 
+  /**
+   * 设置图片位置更新回调
+   */
+  public setImagePositionCallback(callback: ImagePositionCallback): void {
+    this.imageResizeHandler.setImagePositionCallback(callback);
+  }
+
   // 高亮覆盖层元素
   private highlightOverlay: HTMLElement | null = null;
+
+  /**
+   * 创建图片容器的基础样式
+   */
+  private static readonly IMAGE_CONTAINER_BASE_STYLE = `
+    text-align: center;
+    user-select: none;
+    pointer-events: auto;
+    display: none;
+  `;
+
+  /**
+   * 创建图片容器元素
+   */
+  private createImageContainer(position: 'above' | 'below' | 'left' | 'right'): HTMLElement {
+    const container = document.createElement('div');
+    container.className = `node-image-container node-image-container-${position}`;
+    container.contentEditable = 'false';
+    container.style.cssText = NodeDOMRenderer.IMAGE_CONTAINER_BASE_STYLE;
+    return container;
+  }
+
+  /**
+   * 获取图片容器
+   */
+  private getImageContainers(element: HTMLElement): Record<'above' | 'below' | 'left' | 'right', HTMLElement | null> {
+    return {
+      above: element.querySelector('.node-image-container-above') as HTMLElement | null,
+      below: element.querySelector('.node-image-container-below') as HTMLElement | null,
+      left: element.querySelector('.node-image-container-left') as HTMLElement | null,
+      right: element.querySelector('.node-image-container-right') as HTMLElement | null,
+    };
+  }
 
   /**
    * 创建高亮覆盖层
@@ -429,22 +446,35 @@ export class NodeDOMRenderer {
       }
     });
 
-    // 同步有附件节点的实际尺寸
-    // 需要保存 root 引用，以便在回调中使用
+    // 如果正在处理尺寸更新，跳过异步尺寸同步
+    if (this.isProcessingSizeUpdate) {
+      return;
+    }
+
+    // 同步节点的实际尺寸（使用双重 RAF 确保 DOM 完全渲染）
     this.pendingRoot = root;
     this.lastRenderHadSizeUpdates = false;
 
+    // 第一个 RAF：等待 DOM 更新
     requestAnimationFrame(() => {
-      if (this.pendingRoot) {
-        const hasUpdates = this.syncAttachmentNodeSizes(this.pendingRoot);
-        this.lastRenderHadSizeUpdates = hasUpdates;
-        this.pendingRoot = null;
-        
-        // 如果有尺寸更新，触发回调
-        if (hasUpdates && this.onSizeUpdateCallback) {
-          this.onSizeUpdateCallback();
+      // 第二个 RAF：等待浏览器重排完成
+      requestAnimationFrame(() => {
+        if (this.pendingRoot) {
+          const hasUpdates = this.syncNodeSizes(this.pendingRoot);
+          this.lastRenderHadSizeUpdates = hasUpdates;
+          this.pendingRoot = null;
+          
+          // 如果有尺寸更新，触发回调
+          if (hasUpdates && this.onSizeUpdateCallback) {
+            this.isProcessingSizeUpdate = true;
+            try {
+              this.onSizeUpdateCallback();
+            } finally {
+              this.isProcessingSizeUpdate = false;
+            }
+          }
         }
-      }
+      });
     });
   }
 
@@ -457,6 +487,11 @@ export class NodeDOMRenderer {
    * 上次渲染是否有尺寸更新
    */
   private lastRenderHadSizeUpdates = false;
+
+  /**
+   * 是否正在处理尺寸更新
+   */
+  private isProcessingSizeUpdate = false;
 
   /**
    * 尺寸更新回调
@@ -478,14 +513,20 @@ export class NodeDOMRenderer {
   }
 
   /**
-   * 同步有附件节点的实际 DOM 尺寸到节点数据
+   * 同步节点的实际 DOM 尺寸到节点数据
    * @returns 是否有节点尺寸被更新
    */
-  private syncAttachmentNodeSizes(node: HyyMindMapNode): boolean {
+  private syncNodeSizes(node: HyyMindMapNode): boolean {
     let hasUpdates = false;
     const attachment = node.config?.attachment;
+    const imageData = node.config?.image;
+    const imagePosition = imageData?.position || 'above';
+    const isImageHorizontal = imagePosition === 'left' || imagePosition === 'right';
     
-    if (attachment?.type === 'table' || attachment?.type === 'code') {
+    // 表格/代码块节点 或 图片在左右位置的节点 需要同步尺寸
+    const needsSync = (attachment?.type === 'table' || attachment?.type === 'code') || isImageHorizontal;
+    
+    if (needsSync) {
       const element = this.nodeElements.get(node.id);
       if (element) {
         // 获取 DOM 元素的实际尺寸（包括边框）
@@ -506,7 +547,7 @@ export class NodeDOMRenderer {
 
     for (const child of node.children) {
       if (this.shouldChildBeVisible(node, child)) {
-        if (this.syncAttachmentNodeSizes(child)) {
+        if (this.syncNodeSizes(child)) {
           hasUpdates = true;
         }
       }
@@ -595,16 +636,22 @@ export class NodeDOMRenderer {
       transition: box-shadow 0.2s, border-color 0.2s;
     `;
 
-    // 创建图片容器（在内容上方，不可编辑）
-    const imageContainer = document.createElement('div');
-    imageContainer.className = 'node-image-container';
-    imageContainer.contentEditable = 'false';
-    imageContainer.style.cssText = `
-      text-align: center;
-      user-select: none;
-      pointer-events: auto;
+    // 创建图片容器 - 上方
+    element.appendChild(this.createImageContainer('above'));
+
+    // 创建水平容器（用于左中右布局）
+    const horizontalContainer = document.createElement('div');
+    horizontalContainer.className = 'node-horizontal-container';
+    horizontalContainer.style.cssText = `
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      justify-content: center;
     `;
-    element.appendChild(imageContainer);
+    element.appendChild(horizontalContainer);
+
+    // 创建图片容器 - 左侧
+    horizontalContainer.appendChild(this.createImageContainer('left'));
 
     // 创建内容容器
     const contentContainer = document.createElement('div');
@@ -615,7 +662,13 @@ export class NodeDOMRenderer {
       overflow: visible;
       display: inline-block;
     `;
-    element.appendChild(contentContainer);
+    horizontalContainer.appendChild(contentContainer);
+
+    // 创建图片容器 - 右侧
+    horizontalContainer.appendChild(this.createImageContainer('right'));
+
+    // 创建图片容器 - 下方
+    element.appendChild(this.createImageContainer('below'));
 
     // 绑定鼠标按下事件（用于拖拽）
     element.addEventListener('mousedown', (e) => {
@@ -706,14 +759,21 @@ export class NodeDOMRenderer {
     const attachment = node.config?.attachment;
     const hasAttachment = attachment?.type === 'table' || attachment?.type === 'code';
 
+    // 检查图片位置
+    const imageData = node.config?.image;
+    const imagePosition = imageData?.position || 'above';
+    const isImageHorizontal = imagePosition === 'left' || imagePosition === 'right';
+
     // 更新位置和尺寸
     element.style.left = `${node.x}px`;
     element.style.top = `${node.y}px`;
-    element.style.width = hasAttachment ? 'auto' : `${node.width}px`;
-    // 表格/代码块节点和需要换行的普通文本节点使用自动高度
-    const needsAutoHeight = hasAttachment || node.width >= LAYOUT.MAX_NODE_WIDTH;
+    // 表格/代码块节点、以及图片在左右的节点使用自动宽度
+    const needsAutoWidth = hasAttachment || isImageHorizontal;
+    element.style.width = needsAutoWidth ? 'auto' : `${node.width}px`;
+    // 表格/代码块节点、需要换行的普通文本节点、以及图片在左右的节点使用自动高度
+    const needsAutoHeight = hasAttachment || node.width >= LAYOUT.MAX_NODE_WIDTH || isImageHorizontal;
     element.style.height = needsAutoHeight ? 'auto' : `${node.height}px`;
-    element.style.minWidth = hasAttachment ? `${node.width}px` : '';
+    element.style.minWidth = (hasAttachment || isImageHorizontal) ? `${node.width}px` : '';
     element.style.minHeight = (hasAttachment || needsAutoHeight) ? `${node.height}px` : '';
 
     // 如果节点正在编辑（包括表格/代码块单元格），不更新内容
@@ -724,82 +784,94 @@ export class NodeDOMRenderer {
     
     // 更新内容（只在非编辑状态下）
     if (!isEditing) {
-      let imageContainer = element.querySelector('.node-image-container') as HTMLElement;
       const contentContainer = element.querySelector('.node-content') as HTMLElement;
-      
-      // 如果图片容器不存在，创建它（兼容旧的节点元素）
-      if (!imageContainer && contentContainer) {
-        imageContainer = document.createElement('div');
-        imageContainer.className = 'node-image-container';
-        imageContainer.contentEditable = 'false';
-        imageContainer.style.cssText = `
-          text-align: center;
-          user-select: none;
-          pointer-events: auto;
-        `;
-        // 插入到内容容器之前
-        element.insertBefore(imageContainer, contentContainer);
-      }
-      
-      // 更新图片容器（图片在内容上方，单独区域，不可编辑）
-      if (imageContainer) {
-        const imageData = node.config?.image;
-        if (imageData) {
-          const displayWidth = imageData.displayWidth || 200;
+
+      // 获取图片容器
+      const imageContainers = this.getImageContainers(element);
+
+      // 更新图片容器（根据位置选择正确的容器）
+      const nodeImageData = node.config?.image;
+      if (nodeImageData) {
+        const displayWidth = nodeImageData.displayWidth || 200;
+        const position = nodeImageData.position || 'above';
+
+        // 选择正确的容器，隐藏其他容器
+        const activeContainer = imageContainers[position];
+        for (const [pos, container] of Object.entries(imageContainers)) {
+          if (pos !== position && container) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+          }
+        }
+        
+        if (activeContainer) {
           // 检查是否需要更新图片
-          const existingImg = imageContainer.querySelector('.node-image') as HTMLImageElement;
+          const existingImg = activeContainer.querySelector('.node-image') as HTMLImageElement;
           const needsUpdate = !existingImg || 
-            existingImg.src !== imageData.base64 || 
+            existingImg.src !== nodeImageData.base64 || 
             parseInt(existingImg.style.width) !== displayWidth;
           
           if (needsUpdate) {
             // 清空容器并重新创建图片
-            imageContainer.innerHTML = '';
+            activeContainer.innerHTML = '';
             
-            // 创建图片包装器
+            const marginMap = {
+              above: 'margin: 0 auto 8px auto',
+              below: 'margin: 8px auto 0 auto',
+              left: 'margin: 0 8px 0 0',
+              right: 'margin: 0 0 0 8px',
+            };
+
             const imageWrapper = document.createElement('div');
             imageWrapper.className = 'node-image-wrapper';
             imageWrapper.style.cssText = `
               position: relative;
               display: inline-block;
-              margin: 0 auto 8px auto;
+              ${marginMap[position]};
             `;
             
-            // 创建图片元素
             const img = document.createElement('img');
-            img.src = imageData.base64;
+            img.src = nodeImageData.base64;
             img.className = 'node-image';
+            img.draggable = false;
             img.style.cssText = `
               width: ${displayWidth}px;
               height: auto;
               border-radius: 4px;
               display: block;
+              user-select: none;
+              -webkit-user-drag: none;
             `;
-            
+
             imageWrapper.appendChild(img);
-            imageContainer.appendChild(imageWrapper);
+            activeContainer.appendChild(imageWrapper);
             
-            this.imageResizeHandler.bindImageClickEvents(imageWrapper, node.id, imageData);
+            this.imageResizeHandler.bindImageClickEvents(imageWrapper, node.id, nodeImageData);
           } else if (existingImg) {
-            // 只更新宽度
             existingImg.style.width = `${displayWidth}px`;
+            existingImg.draggable = false;
           }
           
-          imageContainer.style.display = 'block';
+          activeContainer.style.display = 'block';
           
           // 如果当前图片被选中，确保手柄存在
           if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
-            const wrapper = imageContainer.querySelector('.node-image-wrapper') as HTMLElement;
+            const wrapper = activeContainer.querySelector('.node-image-wrapper') as HTMLElement;
             if (wrapper && !wrapper.querySelector('.image-resize-handle')) {
-              this.imageResizeHandler.showImageResizeHandles(wrapper, node.id, imageData);
+              this.imageResizeHandler.showImageResizeHandles(wrapper, node.id, nodeImageData);
             }
           }
-        } else {
-          imageContainer.innerHTML = '';
-          imageContainer.style.display = 'none';
-          if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
-            this.imageResizeHandler.clearImageSelection();
+        }
+      } else {
+        // 没有图片，清空所有容器
+        for (const container of Object.values(imageContainers)) {
+          if (container) {
+            container.innerHTML = '';
+            container.style.display = 'none';
           }
+        }
+        if (this.imageResizeHandler.getSelectedImageNodeId() === node.id) {
+          this.imageResizeHandler.clearImageSelection();
         }
       }
       
@@ -952,23 +1024,14 @@ export class NodeDOMRenderer {
    * 更新节点样式状态
    */
   private updateNodeStyles(element: HTMLElement, node: HyyMindMapNode): void {
-    // 获取自定义边框色
     const customBorderColor = node.config?.borderColor;
 
-    // 检查当前节点的图片是否被选中
-    const isImageSelected = this.imageSelectedNodeId === node.id;
-
     // 始终保持 2px 边框，只改变颜色，避免 hover/选中时布局偏移
-    if ((node.isSelected || node.isActive) && !isImageSelected) {
-      // 节点选中/激活状态，但图片未选中时，显示节点选中样式
+    if (node.isSelected || node.isActive) {
+      // 节点选中/激活状态
       element.style.border = `2px solid ${this.theme.nodeSelectedBorderColor}`;
       element.style.boxShadow = `0 0 0 2px ${this.theme.nodeSelectedBorderColor}20`;
       element.dataset.selected = 'true';
-    } else if ((node.isSelected || node.isActive) && isImageSelected) {
-      // 图片选中时，隐藏节点的选中/激活样式
-      element.style.border = `2px solid ${customBorderColor || 'transparent'}`;
-      element.style.boxShadow = 'none';
-      element.dataset.selected = 'false';
     } else if (node.isHover) {
       element.style.border = `2px solid ${customBorderColor || this.theme.nodeBorderColor}`;
       element.style.boxShadow = 'none';

@@ -47,6 +47,11 @@ export interface CodeBlockData {
 }
 
 /**
+ * 图片位置类型
+ */
+export type ImagePosition = 'above' | 'below' | 'left' | 'right';
+
+/**
  * 图片数据
  */
 export interface ImageData {
@@ -64,6 +69,8 @@ export interface ImageData {
   displayHeight?: number;
   /** 上传时间戳 */
   uploadTime?: number;
+  /** 图片位置（默认为 'above'） */
+  position?: ImagePosition;
 }
 
 /**

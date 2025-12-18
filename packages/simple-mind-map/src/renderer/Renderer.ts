@@ -313,14 +313,10 @@ export class Renderer implements IRenderer {
     ctx.fillStyle = customBgColor || this.theme.nodeBackgroundColor;
     this.drawRoundedRect(ctx, x, y, width, height, radius, true, false);
 
-    // 2. 绘制边框（hover、选中或激活时）
+    // 2. 绘制边框（选中或激活时）
     if (node.isSelected || node.isActive) {
       ctx.strokeStyle = this.theme.nodeSelectedBorderColor;
       ctx.lineWidth = 2;
-      this.drawRoundedRect(ctx, x, y, width, height, radius, false, true);
-    } else if (node.isHover) {
-      ctx.strokeStyle = customBorderColor || this.theme.nodeBorderColor;
-      ctx.lineWidth = 1.5;
       this.drawRoundedRect(ctx, x, y, width, height, radius, false, true);
     } else if (customBorderColor) {
       // 有自定义边框色时始终显示边框
